@@ -149,7 +149,7 @@ contract BettingPool {
         _winningSide = _sides[sideIndex].id;
         emit SetWinningSide(_winningSide);
 
-        IERC20(_bettingToken).approve(_bettingFactory, type(uint256).max);
+        IERC20(_bettingToken).safeApprove(_bettingFactory, type(uint256).max);
         BettingPoolFactory(_bettingFactory).setBettingPoolBalance(
             _sides[sideIndex].payouts
         );
