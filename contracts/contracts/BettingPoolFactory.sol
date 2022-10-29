@@ -13,7 +13,7 @@ contract BettingPoolFactory is Ownable {
 
     address private immutable _bettingToken;
 
-    mapping(address => bool) _isBettingPool;
+    mapping(address => bool) private _isBettingPool;
 
     modifier onlyBettingPool() {
         require(_isBettingPool[msg.sender]); // TODO msg

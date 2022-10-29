@@ -67,12 +67,20 @@ contract BettingPool {
         for (uint256 i = 0; i < sides_.length; i++) {
             require(sides_[i] != bytes32(0)); // TODO msg
             require(initialSizes[i] > 0); // TODO msg
-            
+
             _sides.push(Side(sides_[i], 0, 0));
             _sides[i].size += initialSizes[i];
         }
 
         assert(sides_.length == _sides.length);
+    }
+
+    function sidesNum() external view returns (uint256) {
+        return _sides.length;
+    }
+
+    function getSidesData(uint256 index) external view returns (Side memory) {
+        return _sides[index];
     }
 
     function _transferIn() private returns (uint256 amount) {
