@@ -22,9 +22,10 @@ contract BettingPoolFactory is Ownable {
         _bettingToken = bettingToken_;
     }
 
+    // function createBettingPool
+
     function setBettingPoolBalance(uint256 payouts) external onlyBettingPool {
         uint256 balance = IERC20(_bettingToken).balanceOf(msg.sender);
-
         if (balance < payouts) {
             IERC20(_bettingToken).safeTransfer(msg.sender, payouts - balance);
         } else if (payouts < balance) {

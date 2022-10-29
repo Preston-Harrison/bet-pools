@@ -40,25 +40,20 @@ contract BettingPool {
         uint256 payout,
         bytes32 side
     );
-
-    event PayoutClaimed(
-        bytes32 indexed betKey,
-        address indexed better,
-        uint256 payout,
-        bytes32 side
-    );
-
+    event PayoutClaimed(bytes32 indexed betKey);
     event SetWinningSide(bytes32 winningSide);
 
     constructor(
         address bettingToken_,
         bytes32[] memory sides_,
+        uint256[] memory initialSizes,
         uint256 bettingPeriodEnd_
     ) {
         require(bettingToken_.isContract(), "Betting token is not a contract");
-        require(msg.sender.isContract(), "msg.sender is not factory"); 
+        require(msg.sender.isContract(), "msg.sender is not factory");
         require(sides_.length <= 255, "Must be less than 256 sides");
         require(sides_.length >= 2, "Must have at least 2 sides");
+        require(initialSizes.length == sides_.length); // TODO msg
         require(
             bettingPeriodEnd_ > block.timestamp,
             "Betting must end in the future"
@@ -71,7 +66,10 @@ contract BettingPool {
 
         for (uint256 i = 0; i < sides_.length; i++) {
             require(sides_[i] != bytes32(0)); // TODO msg
+            require(initialSizes[i] > 0); // TODO msg
+            
             _sides.push(Side(sides_[i], 0, 0));
+            _sides[i].size += initialSizes[i];
         }
 
         assert(sides_.length == _sides.length);
@@ -96,6 +94,14 @@ contract BettingPool {
         }
     }
 
+    function _getPayout(
+        uint256 amount,
+        uint256 totalSize,
+        uint256 sideSize
+    ) private pure returns (uint256) {
+        return amount + (amount * (totalSize - sideSize)) / sideSize;
+    }
+
     function bet(uint256 sideIndex, bytes32 betKey) external {
         require(sideIndex < _sides.length, "Invalid sideIndex");
         require(block.timestamp < _bettingPeriodEnd); // TODO msg
@@ -104,13 +110,15 @@ contract BettingPool {
         uint256 amount = _transferIn();
         require(amount > 0, "Bet cannot be zero");
 
+        _sides[sideIndex].size += amount;
         uint256 totalSideSize = _getTotalSideSize();
-        uint256 sideSize = _sides[sideIndex].size;
-        uint256 payout = amount +
-            (amount * (totalSideSize - sideSize)) /
-            sideSize;
-
+        uint256 payout = _getPayout(
+            amount,
+            totalSideSize,
+            _sides[sideIndex].size
+        );
         _sides[sideIndex].payouts += payout;
+
         _bets[betKey] = Bet(msg.sender, payout, _sides[sideIndex].id);
         emit BetPlaced(
             betKey,
@@ -127,12 +135,7 @@ contract BettingPool {
         require(_bets[betKey].side == _winningSide); // TODO msg
 
         _transferOut(_bets[betKey].payout, msg.sender);
-        emit PayoutClaimed(
-            betKey,
-            msg.sender,
-            _bets[betKey].payout,
-            _bets[betKey].side
-        );
+        emit PayoutClaimed(betKey);
 
         delete _bets[betKey];
     }
@@ -145,8 +148,10 @@ contract BettingPool {
         assert(_sides[sideIndex].id != bytes32(0));
         _winningSide = _sides[sideIndex].id;
         emit SetWinningSide(_winningSide);
-        
+
         IERC20(_bettingToken).approve(_bettingFactory, type(uint256).max);
-        BettingPoolFactory(_bettingFactory).setBettingPoolBalance(_sides[sideIndex].payouts);
+        BettingPoolFactory(_bettingFactory).setBettingPoolBalance(
+            _sides[sideIndex].payouts
+        );
     }
 }
