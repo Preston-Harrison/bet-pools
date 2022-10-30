@@ -214,6 +214,7 @@ contract BettingPool {
         require(!_canWithdraw, "withdraws are enabled");
         require(_winningSide == bytes32(0), "winning side already set");
         require(block.timestamp > _bettingPeriodEnd, "Betting is not over");
+        assert(side != bytes32(0));
 
         _winningSide = side;
         emit SetWinningSide(_winningSide);
