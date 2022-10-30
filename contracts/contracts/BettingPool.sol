@@ -8,6 +8,7 @@ import "./BettingPoolFactory.sol";
 
 struct Bet {
     address better;
+    uint256 amount;
     uint256 payout;
     bytes32 side;
 }
@@ -32,6 +33,7 @@ contract BettingPool {
 
     Side[] private _sides;
     bytes32 private _winningSide;
+    bool private _canWithdraw;
 
     event BetPlaced(
         bytes32 indexed betKey,
@@ -42,6 +44,13 @@ contract BettingPool {
     );
     event PayoutClaimed(bytes32 indexed betKey);
     event SetWinningSide(bytes32 winningSide);
+    event WithdrawalsEnabled();
+    event BetWithdrawn(bytes32 indexed betKey);
+
+    modifier onlyFactory {
+        require(msg.sender == _bettingFactory);
+        _;
+    }
 
     constructor(
         address bettingToken_,
@@ -63,6 +72,7 @@ contract BettingPool {
         _bettingPeriodEnd = bettingPeriodEnd_;
         _bettingFactory = msg.sender;
         _self = address(this);
+        _canWithdraw = false;
 
         for (uint256 i = 0; i < sides_.length; i++) {
             require(sides_[i] != bytes32(0)); // TODO msg
@@ -110,7 +120,7 @@ contract BettingPool {
         return amount + (amount * (totalSize - sideSize)) / sideSize;
     }
 
-    function bet(uint256 sideIndex, bytes32 betKey) external {
+    function bet(uint256 sideIndex, bytes32 betKey, address better) external {
         require(sideIndex < _sides.length, "Invalid sideIndex");
         require(block.timestamp < _bettingPeriodEnd); // TODO msg
         require(_bets[betKey].better == address(0)); // TODO msg
@@ -127,10 +137,10 @@ contract BettingPool {
         );
         _sides[sideIndex].payouts += payout;
 
-        _bets[betKey] = Bet(msg.sender, payout, _sides[sideIndex].id);
+        _bets[betKey] = Bet(better, amount, payout, _sides[sideIndex].id);
         emit BetPlaced(
             betKey,
-            msg.sender,
+            better,
             amount,
             payout,
             _sides[sideIndex].id
@@ -138,18 +148,35 @@ contract BettingPool {
     }
 
     function claim(bytes32 betKey) external {
-        require(block.timestamp > _bettingPeriodEnd); // TODO msg
+        require(_winningSide != bytes32(0)); // TODO msg
         require(_bets[betKey].better == msg.sender); // TODO msg
         require(_bets[betKey].side == _winningSide); // TODO msg
+        require(block.timestamp > _bettingPeriodEnd); // TODO msg
+        require(!_canWithdraw); // TODO msg
 
         _transferOut(_bets[betKey].payout, msg.sender);
         emit PayoutClaimed(betKey);
-
         delete _bets[betKey];
     }
 
-    function setWinningSide(uint256 sideIndex) external {
-        require(msg.sender == _bettingFactory); // TODO msg
+    function withdraw(bytes32 betKey) external {
+        require(_canWithdraw); // TODO msg
+        require(_bets[betKey].better == msg.sender); // TODO msg
+
+        _transferOut(_bets[betKey].payout, msg.sender);
+        emit BetWithdrawn(betKey);
+        delete _bets[betKey];
+    }
+
+    function allowWithdraws() external onlyFactory {
+        require(!_canWithdraw); // TODO msg
+        require(_winningSide == bytes32(0)); // TODO msg
+        _canWithdraw = true;
+        emit WithdrawalsEnabled();
+    }
+
+    function setWinningSide(uint256 sideIndex) external onlyFactory {
+        require(!_canWithdraw); // TODO msg
         require(_winningSide == bytes32(0)); // TODO msg
         require(sideIndex < _sides.length, "Invalid sideIndex");
 
@@ -162,4 +189,5 @@ contract BettingPool {
             _sides[sideIndex].payouts
         );
     }
+
 }
