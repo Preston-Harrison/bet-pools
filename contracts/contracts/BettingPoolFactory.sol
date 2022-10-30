@@ -11,7 +11,7 @@ contract BettingPoolFactory is Ownable {
     using SafeERC20 for IERC20;
     using Address for address;
 
-    address private immutable _bettingToken;
+    address public immutable bettingToken;
 
     mapping(address => bool) private _isBettingPool;
 
@@ -29,7 +29,7 @@ contract BettingPoolFactory is Ownable {
 
     constructor(address bettingToken_) {
         require(bettingToken_.isContract(), "Betting token is not a contract");
-        _bettingToken = bettingToken_;
+        bettingToken = bettingToken_;
     }
 
     function createBettingPool(
@@ -39,7 +39,7 @@ contract BettingPoolFactory is Ownable {
     ) external onlyOwner {
         address bettingPool = address(
             new BettingPool(
-                _bettingToken,
+                bettingToken,
                 sides,
                 initialSizes,
                 bettingPeriodEnd
@@ -56,11 +56,11 @@ contract BettingPoolFactory is Ownable {
     }
 
     function setBettingPoolBalance(uint256 payouts) external onlyBettingPool {
-        uint256 balance = IERC20(_bettingToken).balanceOf(msg.sender);
+        uint256 balance = IERC20(bettingToken).balanceOf(msg.sender);
         if (balance < payouts) {
-            IERC20(_bettingToken).safeTransfer(msg.sender, payouts - balance);
+            IERC20(bettingToken).safeTransfer(msg.sender, payouts - balance);
         } else if (payouts < balance) {
-            IERC20(_bettingToken).safeTransferFrom(
+            IERC20(bettingToken).safeTransferFrom(
                 msg.sender,
                 address(this),
                 balance - payouts

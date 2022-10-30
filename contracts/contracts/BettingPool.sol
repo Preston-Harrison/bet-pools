@@ -32,28 +32,28 @@ contract BettingPool {
     /// The address of this contract
     address private immutable _self;
     /// The address of the deployer of this contract
-    address private immutable _bettingFactory;
+    address public immutable bettingFactory;
     /// The address of the token that betters can bet with
     address private immutable _bettingToken;
     /// The timestamp (in seconds) that bets must be placed before
-    uint256 private immutable _bettingPeriodEnd;
+    uint256 public immutable bettingPeriodEnd;
 
     /// The previous token balance of this contract.
     /// Only valid while bets are able to be placed.
     uint256 private _prevBalance;
     /// Mapping of beyKeys to bets
-    mapping(bytes32 => Bet) private _bets;
+    mapping(bytes32 => Bet) public bets;
 
     /// Mapping of side ids to side properties
-    mapping(bytes32 => Side) private _sides;
+    mapping(bytes32 => Side) public sides;
     /// Total sum of all side sizes
     uint256 private _totalSideSize;
     /// The winning side, or bytes32(0) if the winner has not been set.
     /// If this is set, _canWithdraw must be false
-    bytes32 private _winningSide;
+    bytes32 public winningSide;
     /// Whether or not users can withdraw their sizes. If this is true, _winningSide must
     /// be bytes32(0).
-    bool private _canWithdraw;
+    bool public canWithdraw;
 
     event BetPlaced(
         bytes32 indexed betKey,
@@ -69,7 +69,7 @@ contract BettingPool {
 
     /// Throws if the msg.sender is not the factory of this contract
     modifier onlyFactory() {
-        require(msg.sender == _bettingFactory, "Msg.sender not factory");
+        require(msg.sender == bettingFactory, "Msg.sender not factory");
         _;
     }
 
@@ -77,7 +77,7 @@ contract BettingPool {
     modifier onlyValidSide(bytes32 side) {
         /// all sides must be initialised with a starting value, so if the value is
         /// zero, the side is invalid
-        require(_sides[side].size > 0, "Invalid side ID");
+        require(sides[side].size > 0, "Invalid side ID");
         _;
     }
 
@@ -106,10 +106,10 @@ contract BettingPool {
         );
 
         _bettingToken = bettingToken_;
-        _bettingPeriodEnd = bettingPeriodEnd_;
-        _bettingFactory = msg.sender;
+        bettingPeriodEnd = bettingPeriodEnd_;
+        bettingFactory = msg.sender;
         _self = address(this);
-        _canWithdraw = false;
+        canWithdraw = false;
 
         for (uint256 i = 0; i < sides_.length; i++) {
             require(sides_[i] != bytes32(0), "Side ID cannot be zero");
@@ -123,8 +123,8 @@ contract BettingPool {
     /// has been transferred in.
     /// @return amount the amount that was transferred in
     function _transferIn() private returns (uint256 amount) {
-        assert(block.timestamp < _bettingPeriodEnd);
-        assert(!_canWithdraw && _winningSide == bytes32(0));
+        assert(block.timestamp < bettingPeriodEnd);
+        assert(!canWithdraw && winningSide == bytes32(0));
         uint256 nextBalance = IERC20(_bettingToken).balanceOf(_self);
         amount = nextBalance - _prevBalance;
         _prevBalance = nextBalance;
@@ -139,8 +139,8 @@ contract BettingPool {
         uint256 size,
         uint256 payout
     ) private {
-        _sides[side].size += size;
-        _sides[side].payouts += payout;
+        sides[side].size += size;
+        sides[side].payouts += payout;
         _totalSideSize += size;
     }
 
@@ -148,8 +148,8 @@ contract BettingPool {
     /// @param amount the amount to transfer out
     /// @param receiver the receiver of the funds
     function _transferOut(uint256 amount, address receiver) private {
-        assert(block.timestamp > _bettingPeriodEnd);
-        assert(_canWithdraw || _winningSide != bytes32(0));
+        assert(block.timestamp > bettingPeriodEnd);
+        assert(canWithdraw || winningSide != bytes32(0));
         IERC20(_bettingToken).safeTransfer(receiver, amount);
     }
 
@@ -162,7 +162,7 @@ contract BettingPool {
         view
         returns (uint256)
     {
-        uint256 size = _sides[side].size + amount;
+        uint256 size = sides[side].size + amount;
         return amount + (amount * (_totalSideSize - size)) / size;
     }
 
@@ -176,8 +176,8 @@ contract BettingPool {
         bytes32 betKey,
         address better
     ) external onlyValidSide(side) {
-        require(block.timestamp < _bettingPeriodEnd, "Betting period is over");
-        require(_bets[betKey].better == address(0), "Bet already exists");
+        require(block.timestamp < bettingPeriodEnd, "Betting period is over");
+        require(bets[betKey].better == address(0), "Bet already exists");
 
         uint256 amount = _transferIn();
         require(amount > 0, "Bet cannot be zero");
@@ -185,7 +185,7 @@ contract BettingPool {
         uint256 payout = _getPayout(amount, side);
         _increaseSide(side, amount, payout);
 
-        _bets[betKey] = Bet(better, amount, payout, side);
+        bets[betKey] = Bet(better, amount, payout, side);
         emit BetPlaced(betKey, better, amount, payout, side);
     }
 
@@ -196,18 +196,18 @@ contract BettingPool {
     ///     - the bet is on the winning side
     /// @param betKey the key of the bet to claim
     function claim(bytes32 betKey) external {
-        require(_winningSide != bytes32(0), "Winning side not set");
-        require(_bets[betKey].better == msg.sender, "Msg.sender is not better");
+        require(winningSide != bytes32(0), "Winning side not set");
+        require(bets[betKey].better == msg.sender, "Msg.sender is not better");
         require(
-            _bets[betKey].side == _winningSide,
+            bets[betKey].side == winningSide,
             "Bet is not on winning side"
         );
-        assert(block.timestamp > _bettingPeriodEnd);
-        assert(!_canWithdraw);
+        assert(block.timestamp > bettingPeriodEnd);
+        assert(!canWithdraw);
 
-        _transferOut(_bets[betKey].payout, msg.sender);
+        _transferOut(bets[betKey].payout, msg.sender);
         emit PayoutClaimed(betKey);
-        delete _bets[betKey];
+        delete bets[betKey];
     }
 
     /// Sets the winning side of this bet pool
@@ -217,17 +217,17 @@ contract BettingPool {
         onlyFactory
         onlyValidSide(side)
     {
-        require(!_canWithdraw, "withdraws are enabled");
-        require(_winningSide == bytes32(0), "winning side already set");
-        require(block.timestamp > _bettingPeriodEnd, "Betting is not over");
+        require(!canWithdraw, "withdraws are enabled");
+        require(winningSide == bytes32(0), "winning side already set");
+        require(block.timestamp > bettingPeriodEnd, "Betting is not over");
         assert(side != bytes32(0));
 
-        _winningSide = side;
-        emit SetWinningSide(_winningSide);
+        winningSide = side;
+        emit SetWinningSide(winningSide);
 
-        IERC20(_bettingToken).safeApprove(_bettingFactory, type(uint256).max);
-        BettingPoolFactory(_bettingFactory).setBettingPoolBalance(
-            _sides[side].payouts
+        IERC20(_bettingToken).safeApprove(bettingFactory, type(uint256).max);
+        BettingPoolFactory(bettingFactory).setBettingPoolBalance(
+            sides[side].payouts
         );
     }
 
@@ -235,19 +235,19 @@ contract BettingPool {
     /// the bets can be withdrawn. This means that the initial amount each better deposited
     /// can be returned, without a winner set.
     function allowWithdraws() external onlyFactory {
-        require(!_canWithdraw, "withdraws already allowed");
-        require(_winningSide == bytes32(0), "winning side already selected");
-        _canWithdraw = true;
+        require(!canWithdraw, "withdraws already allowed");
+        require(winningSide == bytes32(0), "winning side already selected");
+        canWithdraw = true;
         emit WithdrawalsEnabled();
     }
 
     /// Withdraws the amount deposited amount from betKey
     function withdraw(bytes32 betKey) external {
-        require(_canWithdraw, "cannot withdraw from pool");
-        require(_bets[betKey].better == msg.sender, "Msg.sender is not better");
+        require(canWithdraw, "cannot withdraw from pool");
+        require(bets[betKey].better == msg.sender, "Msg.sender is not better");
 
-        _transferOut(_bets[betKey].payout, msg.sender);
+        _transferOut(bets[betKey].payout, msg.sender);
         emit BetWithdrawn(betKey);
-        delete _bets[betKey];
+        delete bets[betKey];
     }
 }
