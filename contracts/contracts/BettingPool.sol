@@ -81,18 +81,18 @@ contract BettingPool {
         _;
     }
 
-    /// @param bettingToken_ the token to accept bets in
+    /// @param bettingToken the token to accept bets in
     /// @param sides_ the array of side ids
     /// @param initialSizes the array of initial sizes. Each element in this array
     /// corresponds with the side id with the same index
     /// @param bettingPeriodEnd_ the end of the betting period
     constructor(
-        address bettingToken_,
+        address bettingToken,
         bytes32[] memory sides_,
         uint256[] memory initialSizes,
         uint256 bettingPeriodEnd_
     ) {
-        require(bettingToken_.isContract(), "Betting token is not a contract");
+        require(bettingToken.isContract(), "Betting token is not a contract");
         require(msg.sender.isContract(), "Msg.sender is not factory");
         require(sides_.length <= 255, "Must be less than 256 sides");
         require(sides_.length >= 2, "Must have at least 2 sides");
@@ -105,7 +105,7 @@ contract BettingPool {
             "Betting must end in the future"
         );
 
-        _bettingToken = bettingToken_;
+        _bettingToken = bettingToken;
         bettingPeriodEnd = bettingPeriodEnd_;
         bettingFactory = msg.sender;
         _self = address(this);
