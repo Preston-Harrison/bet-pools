@@ -63,11 +63,16 @@ contract BettingPoolFactory is Ownable {
         }
     }
 
-    function setWinningSide(address bettingPool, uint256 sideIndex)
+    function setWinningSide(address bettingPool, bytes32 side)
         external
         onlyOwner
     {
         require(_isBettingPool[bettingPool]); // TODO msg
-        BettingPool(bettingPool).setWinningSide(sideIndex);
+        BettingPool(bettingPool).setWinningSide(side);
+    }
+
+    function allowWithdraws(address bettingPool) external onlyOwner {
+        require(_isBettingPool[bettingPool]); // TODO msg
+        BettingPool(bettingPool).allowWithdraws();
     }
 }

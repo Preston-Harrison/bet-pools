@@ -14,7 +14,6 @@ struct Bet {
 }
 
 struct Side {
-    bytes32 id;
     uint256 size;
     uint256 payouts;
 }
@@ -31,7 +30,8 @@ contract BettingPool {
     uint256 private _prevBalance;
     mapping(bytes32 => Bet) private _bets;
 
-    Side[] private _sides;
+    mapping(bytes32 => Side) private _sides;
+    uint256 private _totalSideSize;
     bytes32 private _winningSide;
     bool private _canWithdraw;
 
@@ -47,8 +47,13 @@ contract BettingPool {
     event WithdrawalsEnabled();
     event BetWithdrawn(bytes32 indexed betKey);
 
-    modifier onlyFactory {
+    modifier onlyFactory() {
         require(msg.sender == _bettingFactory);
+        _;
+    }
+
+    modifier onlyValidSide(bytes32 side) {
+        require(_sides[side].size > 0);
         _;
     }
 
@@ -78,19 +83,8 @@ contract BettingPool {
             require(sides_[i] != bytes32(0)); // TODO msg
             require(initialSizes[i] > 0); // TODO msg
 
-            _sides.push(Side(sides_[i], 0, 0));
-            _sides[i].size += initialSizes[i];
+            _increaseSide(sides_[i], initialSizes[i], 0);
         }
-
-        assert(sides_.length == _sides.length);
-    }
-
-    function sidesNum() external view returns (uint256) {
-        return _sides.length;
-    }
-
-    function getSidesData(uint256 index) external view returns (Side memory) {
-        return _sides[index];
     }
 
     function _transferIn() private returns (uint256 amount) {
@@ -100,51 +94,47 @@ contract BettingPool {
         _prevBalance = nextBalance;
     }
 
+    function _increaseSide(
+        bytes32 side,
+        uint256 size,
+        uint256 payout
+    ) private {
+        _sides[side].size += size;
+        _sides[side].payouts += payout;
+        _totalSideSize += size;
+    }
+
     function _transferOut(uint256 _amount, address _receiver) private {
         assert(block.timestamp > _bettingPeriodEnd);
         IERC20(_bettingToken).safeTransfer(_receiver, _amount);
     }
 
-    function _getTotalSideSize() private view returns (uint256 sum) {
-        uint256 length = _sides.length;
-        for (uint256 i = 0; i < length; i++) {
-            sum += _sides[i].size;
-        }
+    function _getPayout(uint256 amount, bytes32 side)
+        private
+        pure
+        returns (uint256)
+    {
+        uint256 size = _sides[side].size;
+        return amount + (amount * (_totalSideSize - size)) / size;
     }
 
-    function _getPayout(
-        uint256 amount,
-        uint256 totalSize,
-        uint256 sideSize
-    ) private pure returns (uint256) {
-        return amount + (amount * (totalSize - sideSize)) / sideSize;
-    }
-
-    function bet(uint256 sideIndex, bytes32 betKey, address better) external {
-        require(sideIndex < _sides.length, "Invalid sideIndex");
+    function bet(
+        bytes32 side,
+        bytes32 betKey,
+        address better
+    ) external onlyValidSide(side) {
         require(block.timestamp < _bettingPeriodEnd); // TODO msg
         require(_bets[betKey].better == address(0)); // TODO msg
 
         uint256 amount = _transferIn();
         require(amount > 0, "Bet cannot be zero");
 
-        _sides[sideIndex].size += amount;
-        uint256 totalSideSize = _getTotalSideSize();
-        uint256 payout = _getPayout(
-            amount,
-            totalSideSize,
-            _sides[sideIndex].size
-        );
-        _sides[sideIndex].payouts += payout;
+        _increaseSide(side, amount, 0);
+        uint256 payout = _getPayout(amount, side);
+        _increaseSide(side, 0, payout);
 
-        _bets[betKey] = Bet(better, amount, payout, _sides[sideIndex].id);
-        emit BetPlaced(
-            betKey,
-            better,
-            amount,
-            payout,
-            _sides[sideIndex].id
-        );
+        _bets[betKey] = Bet(better, amount, payout, side);
+        emit BetPlaced(betKey, better, amount, payout, side);
     }
 
     function claim(bytes32 betKey) external {
@@ -175,19 +165,16 @@ contract BettingPool {
         emit WithdrawalsEnabled();
     }
 
-    function setWinningSide(uint256 sideIndex) external onlyFactory {
+    function setWinningSide(bytes32 side) external onlyFactory onlyValidSide(side) {
         require(!_canWithdraw); // TODO msg
         require(_winningSide == bytes32(0)); // TODO msg
-        require(sideIndex < _sides.length, "Invalid sideIndex");
 
-        assert(_sides[sideIndex].id != bytes32(0));
-        _winningSide = _sides[sideIndex].id;
+        _winningSide = side;
         emit SetWinningSide(_winningSide);
 
         IERC20(_bettingToken).safeApprove(_bettingFactory, type(uint256).max);
         BettingPoolFactory(_bettingFactory).setBettingPoolBalance(
-            _sides[sideIndex].payouts
+            _sides[side].payouts
         );
     }
-
 }
