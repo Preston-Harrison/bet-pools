@@ -38,7 +38,7 @@ contract BettingPool {
     /// The timestamp (in seconds) that bets must be placed before
     uint256 private immutable _bettingPeriodEnd;
 
-    /// The previous token balance of this contract. 
+    /// The previous token balance of this contract.
     /// Only valid while bets are able to be placed.
     uint256 private _prevBalance;
     /// Mapping of beyKeys to bets
@@ -48,7 +48,7 @@ contract BettingPool {
     mapping(bytes32 => Side) private _sides;
     /// Total sum of all side sizes
     uint256 private _totalSideSize;
-    /// The winning side, or bytes32(0) if the winner has not been set. 
+    /// The winning side, or bytes32(0) if the winner has not been set.
     /// If this is set, _canWithdraw must be false
     bytes32 private _winningSide;
     /// Whether or not users can withdraw their sizes. If this is true, _winningSide must
@@ -96,7 +96,10 @@ contract BettingPool {
         require(msg.sender.isContract(), "Msg.sender is not factory");
         require(sides_.length <= 255, "Must be less than 256 sides");
         require(sides_.length >= 2, "Must have at least 2 sides");
-        require(initialSizes.length == sides_.length, "Array lengths must be the same");
+        require(
+            initialSizes.length == sides_.length,
+            "Array lengths must be the same"
+        );
         require(
             bettingPeriodEnd_ > block.timestamp,
             "Betting must end in the future"
@@ -186,7 +189,7 @@ contract BettingPool {
         emit BetPlaced(betKey, better, amount, payout, side);
     }
 
-    /// Claims a bet using a betKey. 
+    /// Claims a bet using a betKey.
     /// Requires that:
     ///     - a winning side is set
     ///     - the better is the msg.sender
@@ -195,7 +198,10 @@ contract BettingPool {
     function claim(bytes32 betKey) external {
         require(_winningSide != bytes32(0), "Winning side not set");
         require(_bets[betKey].better == msg.sender, "Msg.sender is not better");
-        require(_bets[betKey].side == _winningSide, "Bet is not on winning side");
+        require(
+            _bets[betKey].side == _winningSide,
+            "Bet is not on winning side"
+        );
         assert(block.timestamp > _bettingPeriodEnd);
         assert(!_canWithdraw);
 

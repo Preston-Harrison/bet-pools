@@ -15,7 +15,12 @@ contract BettingPoolFactory is Ownable {
 
     mapping(address => bool) private _isBettingPool;
 
-    event CreateBettingPool(address indexed pool, bytes32[] sides, uint256[] initialSizes, uint256 bettingPeriodEnd);
+    event CreateBettingPool(
+        address indexed pool,
+        bytes32[] sides,
+        uint256[] initialSizes,
+        uint256 bettingPeriodEnd
+    );
 
     modifier onlyBettingPool() {
         require(_isBettingPool[msg.sender]); // TODO msg
