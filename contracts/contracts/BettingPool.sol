@@ -4,7 +4,7 @@ pragma solidity 0.8.16;
 import "@openzeppelin/contracts/utils/Address.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import "./BettingPoolFactory.sol";
+import "./BettingFactory.sol";
 
 struct Bet {
     /// The user who will receive the payout of the bet
@@ -81,11 +81,11 @@ contract BettingPool {
         _;
     }
 
-    /// @param bettingToken the token to accept bets in
-    /// @param sides_ the array of side ids
-    /// @param initialSizes the array of initial sizes. Each element in this array
+    /// @param bettingToken The token to accept bets in
+    /// @param sides_ The array of side ids
+    /// @param initialSizes The array of initial sizes. Each element in this array
     /// corresponds with the side id with the same index
-    /// @param bettingPeriodEnd_ the end of the betting period
+    /// @param bettingPeriodEnd_ The end of the betting period
     constructor(
         address bettingToken,
         bytes32[] memory sides_,
@@ -121,7 +121,7 @@ contract BettingPool {
     /// Transfers in an amount by checking the previous balance of the contract
     /// and comparing it to the current balance. The difference is the amount that
     /// has been transferred in.
-    /// @return amount the amount that was transferred in
+    /// @return amount The amount that was transferred in
     function _transferIn() private returns (uint256 amount) {
         assert(block.timestamp < bettingPeriodEnd);
         assert(!canWithdraw && winningSide == bytes32(0));
@@ -131,9 +131,9 @@ contract BettingPool {
     }
 
     /// Increases the size and/or payout of a side
-    /// @param side the side to increase
-    /// @param size the size to increase
-    /// @param payout the payout to increase
+    /// @param side The side to increase
+    /// @param size The size to increase
+    /// @param payout The payout to increase
     function _increaseSide(
         bytes32 side,
         uint256 size,
@@ -145,8 +145,8 @@ contract BettingPool {
     }
 
     /// Transfers out an amount of _bettingToken to a receiver
-    /// @param amount the amount to transfer out
-    /// @param receiver the receiver of the funds
+    /// @param amount The amount to transfer out
+    /// @param receiver The receiver of the funds
     function _transferOut(uint256 amount, address receiver) private {
         assert(block.timestamp > bettingPeriodEnd);
         assert(canWithdraw || winningSide != bytes32(0));
@@ -154,9 +154,9 @@ contract BettingPool {
     }
 
     /// Gets the payout that an amount would get if they picked a side and won
-    /// @param amount the amount to bet
-    /// @param side the side to back
-    /// @return payout the potential payout of the side
+    /// @param amount The amount to bet
+    /// @param side The side to back
+    /// @return payout The potential payout of the side
     function _getPayout(uint256 amount, bytes32 side)
         private
         view
@@ -168,9 +168,9 @@ contract BettingPool {
 
     /// Places a bet on a side, given a unique betKey (used for claiming / withdrawing).
     /// Note the amount of the bet is calculated using the _transferIn function.
-    /// @param side the side to back
-    /// @param betKey a unique key used to claim or withdraw the bet later
-    /// @param better the better for whom to allocate the bet to
+    /// @param side The side to back
+    /// @param betKey A unique key used to claim or withdraw the bet later
+    /// @param better The better for whom to allocate the bet to
     function bet(
         bytes32 side,
         bytes32 betKey,
@@ -194,7 +194,7 @@ contract BettingPool {
     ///     - a winning side is set
     ///     - the better is the msg.sender
     ///     - the bet is on the winning side
-    /// @param betKey the key of the bet to claim
+    /// @param betKey The key of the bet to claim
     function claim(bytes32 betKey) external {
         require(winningSide != bytes32(0), "Winning side not set");
         require(bets[betKey].better == msg.sender, "Msg.sender is not better");
@@ -211,7 +211,7 @@ contract BettingPool {
     }
 
     /// Sets the winning side of this bet pool
-    /// @param side the side that won
+    /// @param side The side that won
     function setWinningSide(bytes32 side)
         external
         onlyFactory
@@ -226,7 +226,7 @@ contract BettingPool {
         emit SetWinningSide(winningSide);
 
         IERC20(_bettingToken).safeApprove(bettingFactory, type(uint256).max);
-        BettingPoolFactory(bettingFactory).setBettingPoolBalance(
+        BettingFactory(bettingFactory).setBettingPoolBalance(
             sides[side].payouts
         );
     }
