@@ -60,7 +60,7 @@ contract BettingPool is Ownable, LiquidityPool, BetToken {
     /// @param marketId The id of the market to create
     /// corresponds with the side id with the same index
     /// @param bettingPeriodEnd The end of the betting period
-    function createMarket(bytes32 marketId, uint256 bettingPeriodEnd)
+    function openMarket(bytes32 marketId, uint256 bettingPeriodEnd)
         external
         onlyOwner
     {
@@ -68,6 +68,10 @@ contract BettingPool is Ownable, LiquidityPool, BetToken {
         require(
             BettingOracle(_oracle).doesMarketExist(marketId),
             "Oracle does not recognise market"
+        );
+        require(
+            !BettingOracle(_oracle).hasWinningSide(marketId),
+            "Market already closed"
         );
         require(!market.exists, "Market already exists");
         require(
