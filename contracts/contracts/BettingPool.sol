@@ -7,22 +7,19 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "./LiquidityPool.sol";
 import "./BetToken.sol";
+import "./Validate.sol";
+import "./BettingOracle.sol";
 
 struct Side {
     /// Total payouts on this side
     uint256 payout;
-    /// whether or not this side exists
-    bool exists;
 }
 
 struct Market {
     /// Mapping of side id to sides
-    mapping(uint256 => Side) sides;
+    mapping(bytes32 => Side) sides;
     /// The side with the largest payout's payout
     uint256 largestSidePayout;
-    /// The winning side, or bytes32(0) if the winner has not been set.
-    /// If this is set, _canWithdraw must be false
-    uint256 winningSide;
     /// The timestamp (in seconds) that bets must be placed before
     uint256 bettingPeriodEnd;
     // set to true if this market exists
@@ -33,41 +30,46 @@ contract BettingPool is Ownable, LiquidityPool, BetToken {
     using Address for address;
     using SafeERC20 for IERC20;
 
+    address private immutable _oracle;
+
     /// Mapping of market Id to market
     mapping(bytes32 => Market) private _markets;
 
-    event CreateMarket(
-        bytes32 indexed market,
-        uint256 sides,
-        uint256 bettingPeriodEnd
-    );
+    event OpenMarket(bytes32 indexed market, uint256 bettingPeriodEnd);
     event SetWinningSide(bytes32 indexed market, uint256 side);
 
     /// Throws if the side is invalid
-    modifier onlyExistingSide(bytes32 marketId, uint256 side) {
+    modifier onlyExistingSide(bytes32 marketId, bytes32 side) {
         Market storage market = _markets[marketId];
-        require(market.sides[side].exists, "Invalid side ID");
+        require(
+            BettingOracle(_oracle).doesSideExist(marketId, side),
+            "Invalid side ID"
+        );
         _;
     }
 
     /// @param bettingToken The token to accept bets in
-    constructor(address bettingToken) LiquidityPool(bettingToken) {
+    constructor(address bettingToken, address oracle)
+        LiquidityPool(bettingToken)
+    {
         require(bettingToken.isContract(), "Betting token is not a contract");
+        require(oracle.isContract(), "Oracle is not contract");
+        _oracle = oracle;
     }
 
     /// @param marketId The id of the market to create
-    /// @param sides The array of side ids
     /// corresponds with the side id with the same index
     /// @param bettingPeriodEnd The end of the betting period
-    function createMarket(
-        bytes32 marketId,
-        uint8 sides,
-        uint256 bettingPeriodEnd
-    ) external onlyOwner {
+    function createMarket(bytes32 marketId, uint256 bettingPeriodEnd)
+        external
+        onlyOwner
+    {
         Market storage market = _markets[marketId];
-        require(marketId != bytes32(0), "Market ID cannot be zero");
+        require(
+            BettingOracle(_oracle).doesMarketExist(marketId),
+            "Oracle does not recognise market"
+        );
         require(!market.exists, "Market already exists");
-        require(sides >= 2, "Must have at least 2 sides");
         require(
             bettingPeriodEnd > block.timestamp,
             "Betting must end in the future"
@@ -76,11 +78,7 @@ contract BettingPool is Ownable, LiquidityPool, BetToken {
         market.bettingPeriodEnd = bettingPeriodEnd;
         market.exists = true;
 
-        for (uint256 i = 1; i <= sides; i++) {
-            market.sides[i].exists = true;
-        }
-
-        emit CreateMarket(marketId, sides, bettingPeriodEnd);
+        emit OpenMarket(marketId, bettingPeriodEnd);
     }
 
     /// Returns whether a market is still open for betting.
@@ -88,7 +86,7 @@ contract BettingPool is Ownable, LiquidityPool, BetToken {
     function _isMarketOpen(bytes32 marketId) private view returns (bool) {
         require(_markets[marketId].exists, "Market non existant");
         if (_markets[marketId].bettingPeriodEnd > block.timestamp) return false;
-        if (_markets[marketId].winningSide != 0) return false;
+        if (BettingOracle(_oracle).hasWinningSide(marketId)) return false;
         return true;
     }
 
@@ -119,7 +117,7 @@ contract BettingPool is Ownable, LiquidityPool, BetToken {
     function _createBet(
         bytes32 marketId,
         address better,
-        uint256 side,
+        bytes32 side,
         uint256 amount,
         uint256 odds
     ) private {
@@ -145,7 +143,7 @@ contract BettingPool is Ownable, LiquidityPool, BetToken {
     }
 
     /// Returns the side for a market
-    function getSide(bytes32 marketId, uint256 side)
+    function getSide(bytes32 marketId, bytes32 side)
         external
         view
         returns (Side memory)
@@ -160,14 +158,12 @@ contract BettingPool is Ownable, LiquidityPool, BetToken {
         returns (
             uint256,
             uint256,
-            uint256,
             bool
         )
     {
         Market storage market = _markets[marketId];
         return (
             market.largestSidePayout,
-            market.winningSide,
             market.bettingPeriodEnd,
             market.exists
         );
@@ -180,11 +176,14 @@ contract BettingPool is Ownable, LiquidityPool, BetToken {
     /// @param better The better for whom to allocate the bet to
     function bet(
         bytes32 marketId,
-        uint256 side,
+        bytes32 side,
         address better,
-        uint256 odds // TODO signing
+        uint256 odds,
+        uint256 expiry,
+        bytes calldata signature
     ) external onlyExistingSide(marketId, side) {
         require(_isMarketOpen(marketId), "Market not open");
+        Validate.validateOdds(owner(), odds, marketId, side, expiry, signature);
 
         uint256 amount = transferIn();
         require(amount > 0, "Bet cannot be zero");
@@ -195,10 +194,16 @@ contract BettingPool is Ownable, LiquidityPool, BetToken {
     /// Claims a bet with id betId
     function claim(uint256 betId) external {
         Bet memory recordedBet = getBet(betId);
-        Market storage market = _markets[recordedBet.market];
         require(!_isMarketOpen(recordedBet.market), "Market still open");
-        require(market.winningSide != 0, "Winning side not set");
-        require(recordedBet.side == market.winningSide, "Bet did not win");
+        require(
+            BettingOracle(_oracle).hasWinningSide(recordedBet.market),
+            "Winning side not set"
+        );
+        require(
+            recordedBet.side ==
+                BettingOracle(_oracle).getWinningSide(recordedBet.market),
+            "Bet did not win"
+        );
 
         uint256 payout = recordedBet.payout;
         // payout the owner of the token
@@ -207,21 +212,5 @@ contract BettingPool is Ownable, LiquidityPool, BetToken {
         burnBet(betId);
         // since the bet is being payed out, the reserved amounts can be decreased
         decreaseReservedAmount(payout);
-    }
-
-    /// Sets the winning side of this bet pool
-    /// @param marketId The market to set the winning side for
-    /// @param side The side that won
-    function setWinningSide(bytes32 marketId, uint256 side)
-        external
-        onlyExistingSide(marketId, side)
-        onlyOwner
-    {
-        Market storage market = _markets[marketId];
-        require(market.winningSide == 0, "winning side already set");
-        require(!_isMarketOpen(marketId), "Market still open");
-
-        market.winningSide = side;
-        emit SetWinningSide(marketId, side);
     }
 }

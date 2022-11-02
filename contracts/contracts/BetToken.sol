@@ -10,7 +10,7 @@ struct Bet {
     /// The payout of the bet
     uint256 payout;
     /// The side the bet is on
-    uint256 side;
+    bytes32 side;
 }
 
 abstract contract BetToken is ERC721, LiquidityPool {
@@ -20,7 +20,7 @@ abstract contract BetToken is ERC721, LiquidityPool {
     /// Counter for mints
     uint256 private _counter;
 
-    constructor() ERC721("Bet", "BET") {}
+    constructor() ERC721("Recorded Bet", "BET") {}
 
     /// Mints a bet to better.
     /// @param market the market of the bet
@@ -30,7 +30,7 @@ abstract contract BetToken is ERC721, LiquidityPool {
         address better,
         bytes32 market,
         uint256 payout,
-        uint256 side
+        bytes32 side
     ) internal {
         _counter++;
         _bets[_counter] = Bet(market, payout, side);
