@@ -11,6 +11,9 @@ struct OracleMarket {
 contract BettingOracle {
     bytes32 constant public NO_WINNER = bytes32(0);
 
+    // TODO oracle state setting
+    // Maybe restrict oracle fetching to valid betting pools?
+
     mapping(bytes32 => OracleMarket) private _markets;
 
     function getWinningSide(bytes32 marketId) external view returns (bytes32) {

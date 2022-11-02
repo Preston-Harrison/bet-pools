@@ -26,6 +26,7 @@ struct Market {
     bool exists;
 }
 
+// TODO decrease reserved amount to winning side
 contract BettingPool is Ownable, LiquidityPool, BetToken {
     using Address for address;
     using SafeERC20 for IERC20;
