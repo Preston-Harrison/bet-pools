@@ -1,3 +1,6 @@
-Roles => FeeDistribution => Liquidity Pool => BettingPool
-            /\                                       /\
-Transferrer |                               BetToken |
+![](Inheritance%20Description.png)
+
+
+Square = abstract contract  
+Arrow w/ no description = inheritance  
+Diamond = contract  
