@@ -43,10 +43,11 @@ contract BettingPool is LiquidityPool, BetToken {
     }
 
     /// @param bettingToken The token to accept bets in
-    constructor(address bettingToken, address oracle)
-        LiquidityPool(bettingToken, msg.sender)
-        Roles(msg.sender)
-    {
+    constructor(
+        address bettingToken,
+        address oracle,
+        address owner
+    ) LiquidityPool(bettingToken, owner) Roles(owner) {
         require(bettingToken.isContract(), "Betting token is not a contract");
         require(oracle.isContract(), "Oracle is not contract");
         _oracle = oracle;
@@ -54,10 +55,7 @@ contract BettingPool is LiquidityPool, BetToken {
 
     /// @param marketId The id of the market to create
     /// corresponds with the side id with the same index
-    function openMarket(bytes32 marketId)
-        external
-        onlyRole(ADMIN_ROLE)
-    {
+    function openMarket(bytes32 marketId) external onlyRole(ADMIN_ROLE) {
         Market storage market = _markets[marketId];
         require(
             BettingOracle(_oracle).doesMarketExist(marketId),
@@ -158,14 +156,7 @@ contract BettingPool is LiquidityPool, BetToken {
     }
 
     /// Returns the market details
-    function getMarket(bytes32 marketId)
-        external
-        view
-        returns (
-            uint256,
-            bool
-        )
-    {
+    function getMarket(bytes32 marketId) external view returns (uint256, bool) {
         Market storage market = _markets[marketId];
         return (market.reserve, market.exists);
     }
