@@ -76,7 +76,10 @@ abstract contract LiquidityPool is Transferrer, FeeDistribution {
         uint256 amount = transferIn();
         require(amount > 0, "Cannot deposit zero");
 
-        uint256 amountOut = _calculateLiquidityTokenForDeposit(amount);
+        uint256 liquidityTokenAmount = _calculateLiquidityTokenForDeposit(
+            amount
+        );
+        uint256 amountOut = collectFees(liquidityTokenAmount, FeeType.Deposit);
         LiquidityToken(liquidityToken).mint(msg.sender, amountOut);
         emit Deposit(msg.sender, amount, amountOut);
     }

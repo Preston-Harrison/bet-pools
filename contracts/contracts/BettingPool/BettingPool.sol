@@ -49,11 +49,7 @@ contract BettingPool is LiquidityPool, BetToken {
         address bettingToken,
         address oracle,
         address owner
-    )
-        Roles(owner)
-        Transferrer(bettingToken)
-        FeeDistribution(owner)
-    {
+    ) Roles(owner) Transferrer(bettingToken) FeeDistribution(owner) {
         require(bettingToken.isContract(), "Betting token is not a contract");
         require(oracle.isContract(), "Oracle is not contract");
         _oracle = oracle;
@@ -186,7 +182,8 @@ contract BettingPool is LiquidityPool, BetToken {
         uint256 amount = transferIn();
         require(amount > 0, "Bet cannot be zero");
 
-        _createBet(marketId, better, side, amount, odds);
+        uint256 betAmount = collectFees(amount, FeeType.Bet);
+        _createBet(marketId, better, side, betAmount, odds);
     }
 
     /// Claims a bet with id betId

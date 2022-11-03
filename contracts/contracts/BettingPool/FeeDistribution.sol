@@ -32,13 +32,6 @@ abstract contract FeeDistribution is Transferrer, Roles {
         returns (uint256)
     {
         // TODO fee calculations TBD. Something like this, probably
-        if (feeType == FeeType.Bet) {
-            return amount;
-        } else if (feeType == FeeType.Deposit) {
-            return amount;
-        } else if (feeType == FeeType.Withdraw) {
-            return amount;
-        }
-        revert();
+        return amount;
     }
 }
