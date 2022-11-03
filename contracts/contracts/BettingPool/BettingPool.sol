@@ -7,7 +7,9 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "./LiquidityPool.sol";
 import "./BetToken.sol";
-import "./BettingOracle.sol";
+import "../BettingOracle.sol";
+import "./Transferrer.sol";
+import "./FeeDistribution.sol";
 
 struct Market {
     /// Mapping of side id to total payout on each side
@@ -47,7 +49,11 @@ contract BettingPool is LiquidityPool, BetToken {
         address bettingToken,
         address oracle,
         address owner
-    ) LiquidityPool(bettingToken, owner) Roles(owner) {
+    )
+        Roles(owner)
+        Transferrer(bettingToken)
+        FeeDistribution(owner)
+    {
         require(bettingToken.isContract(), "Betting token is not a contract");
         require(oracle.isContract(), "Oracle is not contract");
         _oracle = oracle;
