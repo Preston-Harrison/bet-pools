@@ -9,19 +9,12 @@ import "./LiquidityPool.sol";
 import "./BetToken.sol";
 import "./BettingOracle.sol";
 
-struct Side {
-    /// Total payouts on this side
-    uint256 payout;
-}
-
 struct Market {
-    /// Mapping of side id to sides
-    mapping(bytes32 => Side) sides;
+    /// Mapping of side id to total payout on each side
+    mapping(bytes32 => uint256) payouts;
     /// The amount this market should reserve for payouts
     /// This is set to zero after
     uint256 reserve;
-    /// The timestamp (in seconds) that bets must be placed before
-    uint256 bettingPeriodEnd;
     // set to true if this market exists
     bool exists;
 }
@@ -30,12 +23,13 @@ contract BettingPool is LiquidityPool, BetToken {
     using Address for address;
     using SafeERC20 for IERC20;
 
+    /// The oracle that provides betting information
     address private immutable _oracle;
 
     /// Mapping of market Id to market
     mapping(bytes32 => Market) private _markets;
 
-    event OpenMarket(bytes32 indexed market, uint256 bettingPeriodEnd);
+    event OpenMarket(bytes32 indexed market);
     event SetWinningSide(bytes32 indexed market, uint256 side);
 
     /// Throws if the side is invalid
@@ -60,8 +54,7 @@ contract BettingPool is LiquidityPool, BetToken {
 
     /// @param marketId The id of the market to create
     /// corresponds with the side id with the same index
-    /// @param bettingPeriodEnd The end of the betting period
-    function openMarket(bytes32 marketId, uint256 bettingPeriodEnd)
+    function openMarket(bytes32 marketId)
         external
         onlyRole(ADMIN_ROLE)
     {
@@ -75,22 +68,16 @@ contract BettingPool is LiquidityPool, BetToken {
             "Market already closed"
         );
         require(!market.exists, "Market already exists");
-        require(
-            bettingPeriodEnd > block.timestamp,
-            "Betting must end in the future"
-        );
 
-        market.bettingPeriodEnd = bettingPeriodEnd;
         market.exists = true;
 
-        emit OpenMarket(marketId, bettingPeriodEnd);
+        emit OpenMarket(marketId);
     }
 
     /// Returns whether a market is still open for betting.
     /// Reverts if the market does not exist
     function _isMarketOpen(bytes32 marketId) private view returns (bool) {
         require(_markets[marketId].exists, "Market non existant");
-        if (_markets[marketId].bettingPeriodEnd > block.timestamp) return false;
         if (BettingOracle(_oracle).hasWinningSide(marketId)) return false;
         return true;
     }
@@ -135,10 +122,10 @@ contract BettingPool is LiquidityPool, BetToken {
         // if the market has become the new largest side payout, increase
         // the reserved amount so that the new reserved amount includes
         // the new total payout
-        market.sides[side].payout += payout;
-        if (market.sides[side].payout > market.reserve) {
-            increaseReservedAmount(market.sides[side].payout - market.reserve);
-            market.reserve = market.sides[side].payout;
+        market.payouts[side] += payout;
+        if (market.payouts[side] > market.reserve) {
+            increaseReservedAmount(market.payouts[side] - market.reserve);
+            market.reserve = market.payouts[side];
         }
 
         // since market specific logic is taken care of, mint the token
@@ -162,12 +149,12 @@ contract BettingPool is LiquidityPool, BetToken {
     }
 
     /// Returns the side for a market
-    function getSide(bytes32 marketId, bytes32 side)
+    function getPayout(bytes32 marketId, bytes32 side)
         external
         view
-        returns (Side memory)
+        returns (uint256)
     {
-        return _markets[marketId].sides[side];
+        return _markets[marketId].payouts[side];
     }
 
     /// Returns the market details
@@ -176,12 +163,11 @@ contract BettingPool is LiquidityPool, BetToken {
         view
         returns (
             uint256,
-            uint256,
             bool
         )
     {
         Market storage market = _markets[marketId];
-        return (market.reserve, market.bettingPeriodEnd, market.exists);
+        return (market.reserve, market.exists);
     }
 
     /// Places a bet on a side, given a unique betKey (used for claiming / withdrawing).
@@ -239,7 +225,7 @@ contract BettingPool is LiquidityPool, BetToken {
         }
 
         bytes32 winner = BettingOracle(_oracle).getWinningSide(marketId);
-        uint256 truePayout = _markets[marketId].sides[winner].payout;
+        uint256 truePayout = _markets[marketId].payouts[winner];
         uint256 reservedPayout = _markets[marketId].reserve;
 
         _markets[marketId].reserve = 0;
