@@ -3,9 +3,12 @@ pragma solidity 0.8.16;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import "@openzeppelin/contracts/utils/Address.sol";
 
 contract Transferrer {
     using SafeERC20 for IERC20;
+    using Address for address;
+
     /// An internal tracker of the token balance, to be used by
     /// the _transferInPoolToken method exclusively
     uint256 private _prevBalance;
@@ -17,6 +20,7 @@ contract Transferrer {
     address internal immutable self;
 
     constructor(address poolToken_) {
+        require(poolToken_.isContract(), "Pool token not contract");
         poolToken = poolToken_;
         self = address(this);
     }
