@@ -8,7 +8,7 @@ struct OracleMarket {
 }
 
 contract BettingOracle {
-    bytes32 constant public NO_WINNER = bytes32(0);
+    bytes32 public constant NO_WINNER = bytes32(0);
 
     // TODO oracle state setting
     // Maybe restrict oracle fetching to valid betting pools?
@@ -32,7 +32,11 @@ contract BettingOracle {
         return _markets[marketId].exists;
     }
 
-    function doesSideExist(bytes32 marketId, bytes32 side) external view returns (bool) {
+    function doesSideExist(bytes32 marketId, bytes32 side)
+        external
+        view
+        returns (bool)
+    {
         return _markets[marketId].sides[side];
     }
 }
