@@ -3,7 +3,6 @@ pragma solidity 0.8.16;
 
 struct OracleMarket {
     bytes32 winningSide;
-    mapping(bytes32 => bool) isSide;
     mapping(bytes32 => bool) sides;
     bool exists;
 }
