@@ -2,12 +2,12 @@
 pragma solidity 0.8.16;
 
 import "@openzeppelin/contracts/utils/Address.sol";
-import "./LiquidityToken.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import "@openzeppelin/contracts/access/Ownable.sol";
+import "./LiquidityToken.sol";
+import "./Roles.sol";
 
-abstract contract LiquidityPool is Ownable {
+abstract contract LiquidityPool is Roles {
     using SafeERC20 for IERC20;
     using Address for address;
 
@@ -43,18 +43,18 @@ abstract contract LiquidityPool is Ownable {
     event DecreaseReservedAmount(uint256 amount);
 
     /// @param poolToken_ The token liquidity providers stake
-    constructor(address poolToken_) {
+    constructor(address poolToken_, address feeReceipient_) {
         require(poolToken_.isContract(), "PoolToken is not contract");
 
         poolToken = poolToken_;
         self = address(this);
-        feeReceipient = owner();
+        feeReceipient = feeReceipient_;
         liquidityToken = address(new LiquidityToken("BET Pool", "sBET"));
     }
 
     /// Sets the fee as a fraction of 1 ether
     /// @param fee_ The new fee
-    function setFee(uint256 fee_) external onlyOwner {
+    function setFee(uint256 fee_) external onlyRole(ADMIN_ROLE) {
         require(fee_ <= MAX_FEE, "");
         require(fee != fee_, "Prevented null change");
         fee = fee_;

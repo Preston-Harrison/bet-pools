@@ -13,7 +13,7 @@ struct Bet {
     bytes32 side;
 }
 
-abstract contract BetToken is ERC721, LiquidityPool {
+abstract contract BetToken is ERC721 {
     /// Mapping of id to bets
     mapping(uint256 => Bet) private _bets;
 

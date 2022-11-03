@@ -4,10 +4,9 @@ pragma solidity 0.8.16;
 import "@openzeppelin/contracts/utils/Address.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "./LiquidityPool.sol";
 import "./BetToken.sol";
-import "./Validate.sol";
 import "./BettingOracle.sol";
 
 struct Side {
@@ -18,16 +17,16 @@ struct Side {
 struct Market {
     /// Mapping of side id to sides
     mapping(bytes32 => Side) sides;
-    /// The side with the largest payout's payout
-    uint256 largestSidePayout;
+    /// The amount this market should reserve for payouts
+    /// This is set to zero after
+    uint256 reserve;
     /// The timestamp (in seconds) that bets must be placed before
     uint256 bettingPeriodEnd;
     // set to true if this market exists
     bool exists;
 }
 
-// TODO decrease reserved amount to winning side
-contract BettingPool is Ownable, LiquidityPool, BetToken {
+contract BettingPool is LiquidityPool, BetToken {
     using Address for address;
     using SafeERC20 for IERC20;
 
@@ -51,7 +50,8 @@ contract BettingPool is Ownable, LiquidityPool, BetToken {
 
     /// @param bettingToken The token to accept bets in
     constructor(address bettingToken, address oracle)
-        LiquidityPool(bettingToken)
+        LiquidityPool(bettingToken, msg.sender)
+        Roles(msg.sender)
     {
         require(bettingToken.isContract(), "Betting token is not a contract");
         require(oracle.isContract(), "Oracle is not contract");
@@ -63,7 +63,7 @@ contract BettingPool is Ownable, LiquidityPool, BetToken {
     /// @param bettingPeriodEnd The end of the betting period
     function openMarket(bytes32 marketId, uint256 bettingPeriodEnd)
         external
-        onlyOwner
+        onlyRole(ADMIN_ROLE)
     {
         Market storage market = _markets[marketId];
         require(
@@ -136,15 +136,29 @@ contract BettingPool is Ownable, LiquidityPool, BetToken {
         // the reserved amount so that the new reserved amount includes
         // the new total payout
         market.sides[side].payout += payout;
-        if (market.sides[side].payout > market.largestSidePayout) {
-            increaseReservedAmount(
-                market.sides[side].payout - market.largestSidePayout
-            );
-            market.largestSidePayout = market.sides[side].payout;
+        if (market.sides[side].payout > market.reserve) {
+            increaseReservedAmount(market.sides[side].payout - market.reserve);
+            market.reserve = market.sides[side].payout;
         }
 
         // since market specific logic is taken care of, mint the token
         mintBet(better, marketId, payout, side);
+    }
+
+    /// Throws if the parameters provided are not signed by someone with SIGNER_ROLE
+    function _validateOdds(
+        uint256 odds,
+        bytes32 market,
+        bytes32 side,
+        uint256 expiry,
+        bytes calldata signature
+    ) private view {
+        bytes memory message = abi.encodePacked(odds, market, side, expiry);
+        bytes32 hash = ECDSA.toEthSignedMessageHash(keccak256(message));
+        require(
+            hasRole(SIGNER_ROLE, ECDSA.recover(hash, signature)),
+            "Invalid signature"
+        );
     }
 
     /// Returns the side for a market
@@ -167,11 +181,7 @@ contract BettingPool is Ownable, LiquidityPool, BetToken {
         )
     {
         Market storage market = _markets[marketId];
-        return (
-            market.largestSidePayout,
-            market.bettingPeriodEnd,
-            market.exists
-        );
+        return (market.reserve, market.bettingPeriodEnd, market.exists);
     }
 
     /// Places a bet on a side, given a unique betKey (used for claiming / withdrawing).
@@ -188,7 +198,7 @@ contract BettingPool is Ownable, LiquidityPool, BetToken {
         bytes calldata signature
     ) external onlyExistingSide(marketId, side) {
         require(_isMarketOpen(marketId), "Market not open");
-        Validate.validateOdds(owner(), odds, marketId, side, expiry, signature);
+        _validateOdds(odds, marketId, side, expiry, signature);
 
         uint256 amount = transferIn();
         require(amount > 0, "Bet cannot be zero");
@@ -209,6 +219,7 @@ contract BettingPool is Ownable, LiquidityPool, BetToken {
                 BettingOracle(_oracle).getWinningSide(recordedBet.market),
             "Bet did not win"
         );
+        _decreaseReservedOnMarketClose(recordedBet.market);
 
         uint256 payout = recordedBet.payout;
         // payout the owner of the token
@@ -217,5 +228,35 @@ contract BettingPool is Ownable, LiquidityPool, BetToken {
         burnBet(betId);
         // since the bet is being payed out, the reserved amounts can be decreased
         decreaseReservedAmount(payout);
+    }
+
+    /// Decreases the reserved amounts for a marketId by the difference between
+    /// the winning sides payout and the maximum payout side's payout.
+    function _decreaseReservedOnMarketClose(bytes32 marketId) private {
+        if (_markets[marketId].reserve == 0) {
+            // the reserved amount has already been decreased.
+            return;
+        }
+
+        bytes32 winner = BettingOracle(_oracle).getWinningSide(marketId);
+        uint256 truePayout = _markets[marketId].sides[winner].payout;
+        uint256 reservedPayout = _markets[marketId].reserve;
+
+        _markets[marketId].reserve = 0;
+        if (truePayout != reservedPayout) {
+            // the reserved payout is always >= the true payout
+            decreaseReservedAmount(reservedPayout - truePayout);
+        }
+    }
+
+    function supportsInterface(bytes4 interfaceId)
+        public
+        view
+        override(ERC721, AccessControl)
+        returns (bool)
+    {
+        return
+            interfaceId == type(IAccessControl).interfaceId ||
+            super.supportsInterface(interfaceId);
     }
 }
