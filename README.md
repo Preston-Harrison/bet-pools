@@ -1,1 +1,0 @@
-The Betting Pool takes care of market state, such as which markets are allowed to be bet on, total payouts, etc. The 
