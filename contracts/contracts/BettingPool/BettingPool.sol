@@ -71,7 +71,7 @@ contract BettingPool is LiquidityPool, BetToken {
             market.payouts[side],
             getFreeBalance()
         );
-        return payout * 1 ether / amount;
+        return payout * BettingMath.PRECISION / amount;
     }
 
     /// @param marketId the market to bet
@@ -126,7 +126,7 @@ contract BettingPool is LiquidityPool, BetToken {
         uint256 expiry,
         bytes calldata signature
     ) private view {
-        require(odds > 1 ether, "Cannot have odds <= 1x");
+        require(odds > BettingMath.PRECISION, "Cannot have odds <= 1x");
         bytes memory message = abi.encodePacked(odds, market, side, expiry);
         bytes32 hash = ECDSA.toEthSignedMessageHash(keccak256(message));
         require(
