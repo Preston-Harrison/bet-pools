@@ -14,14 +14,16 @@ contract BettingFactory is Ownable {
     using Address for address;
 
     /// Address of the oracle
-    address public immutable oracle; // I don't think this can be changed safely
+    address public oracle; // I don't think this can be changed safely
 
     /// Mapping of betting pool address to betting pool details
     mapping(address => BettingPoolData) private _bettingPool;
 
     event CreatePool(address indexed pool, address indexed token);
 
-    constructor(address oracle_) {
+    /// Sets the address of the oracle. This can only be called once
+    function setOracle(address oracle_) external onlyOwner {
+        require(oracle == address(0), "Oracle already set");
         require(oracle_.isContract(), "Oracle is not contract");
         oracle = oracle_;
     }
@@ -29,6 +31,7 @@ contract BettingFactory is Ownable {
     /// Creates a pool that accepts bets with token
     function createPool(address token) external returns (address) {
         require(token.isContract(), "Token not contract");
+        require(oracle != address(0), "Oracle not set");
 
         address bettingPool = address(
             new BettingPool(token, oracle, msg.sender)

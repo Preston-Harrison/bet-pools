@@ -14,11 +14,16 @@ import "./FeeDistribution.sol";
 struct Market {
     /// Mapping of side id to total payout on each side
     mapping(bytes32 => uint256) payouts;
-    /// The amount this market should reserve for payouts
-    /// This is set to zero after
-    uint256 reserve;
     /// The total value of bets on this market, in bettingToken
     uint256 size;
+    /// The amount of bettingToken this market should reserve.
+    /// While betting is active, this is either size, or the payout,
+    /// of the side with the greatest payout, whichever is greater.
+    /// If the market is cancelled, the market should reserve the size
+    /// of everyones bets.
+    /// If the market finishes successfully (i.e. betters can claim),
+    /// the market should reserve the payout of the winning size.
+    uint256 reserve;
 }
 
 contract BettingPool is LiquidityPool, BetToken {
@@ -57,6 +62,7 @@ contract BettingPool is LiquidityPool, BetToken {
         view
         returns (uint256)
     {
+        // TODO only adjust odds once size increases reserved amount
         uint256 free = getFreeBalance(); // TODO maybe limit this
         return 1 ether + (free * odds) / (free + amount);
     }
@@ -79,14 +85,18 @@ contract BettingPool is LiquidityPool, BetToken {
         uint256 adjustedOdds = getAdjustedOdds(amount, odds);
         uint256 payout = _calculatePayout(amount, adjustedOdds);
 
-        // if the market has become the new largest side payout, increase
-        // the reserved amount so that the new reserved amount includes
-        // the new total payout
+        // adjust market values
         market.payouts[side] += payout;
         market.size += amount;
-        if (market.payouts[side] > market.reserve) {
-            increaseReservedAmount(market.payouts[side] - market.reserve);
-            market.reserve = market.payouts[side];
+
+        // adjust the reserve of the market if either the size or payouts have
+        // surpassed the current reserve
+        uint256 newPayout = market.payouts[side];
+        uint256 newSize = market.size;
+        uint256 possibleNewReserve = newPayout > newSize ? newPayout : newSize;
+        if (possibleNewReserve > market.reserve) {
+            increaseReservedAmount(possibleNewReserve - market.reserve);
+            market.reserve = possibleNewReserve;
         }
 
         // since market specific logic is taken care of, mint the token
@@ -120,8 +130,12 @@ contract BettingPool is LiquidityPool, BetToken {
     }
 
     /// Returns the market details
-    function getMarketReserve(bytes32 marketId) external view returns (uint256) {
-        return _markets[marketId].reserve;
+    function getMarket(bytes32 marketId)
+        external
+        view
+        returns (uint256, uint256)
+    {
+        return (_markets[marketId].size, _markets[marketId].reserve);
     }
 
     /// Places a bet on a side, given a unique betKey (used for claiming / withdrawing).
@@ -151,8 +165,8 @@ contract BettingPool is LiquidityPool, BetToken {
     function claim(uint256 betId) external {
         Bet memory betToken = getBet(betId);
         _oracle.validateClaim(betToken.market, betToken.side);
-        // since the oracle has validated the claim, the side of the bet is the winning side
-        _decreaseReservedOnMarketClose(betToken.market, betToken.side);
+        // since the oracle has validated the claim, collapse the market reserve
+        _collapseMarketReserve(betToken.market);
 
         uint256 payout = betToken.payout;
         // payout the owner of the token
@@ -163,24 +177,32 @@ contract BettingPool is LiquidityPool, BetToken {
         decreaseReservedAmount(payout);
     }
 
-    /// Decreases the reserved amounts for a marketId by the difference between
-    /// the winning sides payout and the maximum payout side's payout.
-    function _decreaseReservedOnMarketClose(bytes32 marketId, bytes32 winner)
-        private
-    {
-        if (_markets[marketId].reserve == 0) {
-            // the reserved amount has already been decreased.
+    /// This should only be called after a market has finished accepting bets, either
+    /// by having a winning side set, or the market being closed for withdraws.
+    /// This decreases the reserved amounts by the difference between the maximum
+    /// possible reserved amount (where the winning side is not known, and the market has
+    /// the possibility of cancellation) and the true reserved amount (the payout
+    /// of the winning side if the market is not cancelled, or the size of all bets if the
+    /// market is cancelled)
+    function _collapseMarketReserve(bytes32 marketId) private {
+        Market storage market = _markets[marketId];
+        uint256 reserve = market.reserve;
+        if (reserve == 0) {
+            // the reserved amount has already been collapsed.
             return;
         }
+        // either the market is cancelled, or the winning side is set
+        (bytes32 winningSide, , bool isCancelled, ) = _oracle.getMarket(
+            marketId
+        );
 
-        uint256 truePayout = _markets[marketId].payouts[winner];
-        uint256 reservedPayout = _markets[marketId].reserve;
-
-        _markets[marketId].reserve = 0;
-        if (truePayout != reservedPayout) {
-            // the reserved payout is always >= the true payout
-            decreaseReservedAmount(reservedPayout - truePayout);
+        if (isCancelled && reserve > market.size) {
+            decreaseReservedAmount(reserve - market.size);
+        } else if (reserve > market.payouts[winningSide]) {
+            /// at this point market is not cancelled, so winning side must be set
+            decreaseReservedAmount(reserve - market.payouts[winningSide]);
         }
+        market.reserve = 0;
     }
 
     function supportsInterface(bytes4 interfaceId)
