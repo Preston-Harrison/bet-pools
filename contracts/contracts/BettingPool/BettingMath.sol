@@ -17,7 +17,7 @@ library BettingMath {
         uint256 sidePayout,
         uint256 freeLiquidity
     ) internal pure returns (uint256) {
-        uint256 potentialPayout = (amount * odds) / 1 ether;
+        uint256 potentialPayout = (amount * odds) / PRECISION;
         if (maxPayout >= sidePayout + potentialPayout) {
             // potential payout + side payout is still less than max payout, so
             // linear odds can be used
@@ -34,7 +34,7 @@ library BettingMath {
         // value that will be linearly scaled
         uint256 linearX = maxPayout - sidePayout;
 
-        uint256 linearY = (linearX * odds) / 1 ether;
+        uint256 linearY = (linearX * odds) / PRECISION;
         
         // liquidity - liquidity / sqrt((2x / liquidity) + 1)
         uint256 scaledY = freeLiquidity -
