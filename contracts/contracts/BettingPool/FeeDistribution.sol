@@ -34,6 +34,7 @@ abstract contract FeeDistribution is Transferrer, Roles {
     address private immutable _factory;
 
     event ChangeFeeRecipient(address feeReceipient);
+    event FeeCollected(uint256 fee, FeeType indexed feeType);
 
     constructor(address adminFeeReceipient_) {
         require(
@@ -61,12 +62,12 @@ abstract contract FeeDistribution is Transferrer, Roles {
     /// Collects fees and returns the amount after fees have been taken
     function collectFees(uint256 amount, FeeType feeType)
         internal
-        returns (uint256)
+        returns (uint256 amountRemaining)
     {
         if (feeType == FeeType.Deposit || feeType == FeeType.Withdraw) {
             uint256 fee = _calculateFraction(amount, DEPOSIT_WITHDRAW_FEE);
             transferOut(_factory, fee);
-            return amount - fee;
+            amountRemaining = amount - fee;
         } else if (feeType == FeeType.Bet) {
             uint256 totalFee = _calculateFraction(amount, BET_FEE);
             // no need to transfer liquidty fee as it just accrues in the pool
@@ -74,9 +75,11 @@ abstract contract FeeDistribution is Transferrer, Roles {
                 adminFeeReceipient,
                 _calculateFraction(totalFee, ADMIN_FEE)
             );
-            return amount - totalFee;
+            amountRemaining = amount - totalFee;
         }
-        revert(); // shouldn't happen
+
+        emit FeeCollected(amount - amountRemaining, feeType);
+        return amountRemaining;
     }
 
     function _calculateFraction(uint256 amount, uint256 fraction)
