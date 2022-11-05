@@ -195,6 +195,24 @@ contract BettingPool is LiquidityPool, BetToken {
         return payout;
     }
 
+    /// If a market has been cancelled (e.g. a sports game is called off),
+    /// all betters can claim the amount they bet back (except for fees).
+    /// This can be called by anyone, and withdraws the amount back to the
+    /// owner of the bet token
+    /// @param betId the bet to withdraw
+    /// @return size the size of the bet, also the amount transferred out
+    function withdrawBet(uint256 betId) external returns (uint256) {
+        Bet memory betToken = getBet(betId);
+        _oracle.validateWithdraw(betToken.market);
+        _collapseMarketReserve(betToken.market);
+        
+        uint256 size = betToken.size;
+        transferOut(ownerOf(betId), size);
+        decreaseReservedAmount(size);
+        burnBet(betId);
+        return size;
+    }
+
     /// This should only be called after a market has finished accepting bets, either
     /// by having a winning side set, or the market being closed for withdraws.
     /// This decreases the reserved amounts by the difference between the maximum
@@ -221,24 +239,6 @@ contract BettingPool is LiquidityPool, BetToken {
             decreaseReservedAmount(reserve - market.payouts[winningSide]);
         }
         market.reserve = 0;
-    }
-
-    /// If a market has been cancelled (e.g. a sports game is called off),
-    /// all betters can claim the amount they bet back (except for fees).
-    /// This can be called by anyone, and withdraws the amount back to the
-    /// owner of the bet token
-    /// @param betId the bet to withdraw
-    /// @return size the size of the bet, also the amount transferred out
-    function withdrawBet(uint256 betId) external returns (uint256) {
-        Bet memory betToken = getBet(betId);
-        _oracle.validateWithdraw(betToken.market);
-        _collapseMarketReserve(betToken.market);
-        
-        uint256 size = betToken.size;
-        transferOut(ownerOf(betId), size);
-        decreaseReservedAmount(size);
-        burnBet(betId);
-        return size;
     }
 
     function supportsInterface(bytes4 interfaceId)
