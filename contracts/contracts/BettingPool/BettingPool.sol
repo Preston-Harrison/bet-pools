@@ -5,6 +5,7 @@ import "@openzeppelin/contracts/utils/Address.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+import "@openzeppelin/contracts/utils/math/Math.sol";
 import "./LiquidityPool.sol";
 import "./BetToken.sol";
 import "../BettingOracle.sol";
@@ -104,10 +105,10 @@ contract BettingPool is LiquidityPool, BetToken {
         // surpassed the current reserve
         uint256 newPayout = market.payouts[side];
         uint256 newSize = market.size;
-        uint256 possibleNewReserve = newPayout > newSize ? newPayout : newSize;
-        if (possibleNewReserve > market.reserve) {
-            increaseReservedAmount(possibleNewReserve - market.reserve);
-            market.reserve = possibleNewReserve;
+        uint256 possibleGreaterReserve = Math.max(newPayout, newSize);
+        if (possibleGreaterReserve > market.reserve) {
+            increaseReservedAmount(possibleGreaterReserve - market.reserve);
+            market.reserve = possibleGreaterReserve;
         }
 
         if (newPayout > market.maxPayout) {
