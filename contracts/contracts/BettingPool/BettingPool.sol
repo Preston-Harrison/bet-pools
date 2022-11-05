@@ -115,7 +115,7 @@ contract BettingPool is LiquidityPool, BetToken {
         }
 
         // since market specific logic is taken care of, mint the token
-        mintBet(better, marketId, payout, side);
+        mintBet(better, marketId, amount, payout, side);
     }
 
     /// Throws if the parameters provided are not signed by someone with SIGNER_ROLE

@@ -7,6 +7,8 @@ import "./LiquidityPool.sol";
 struct Bet {
     /// The market in which this bet resides
     bytes32 market;
+    /// The size of the bet
+    uint256 size;
     /// The payout of the bet
     uint256 payout;
     /// The side the bet is on
@@ -29,11 +31,12 @@ abstract contract BetToken is ERC721 {
     function mintBet(
         address better,
         bytes32 market,
+        uint256 amount,
         uint256 payout,
         bytes32 side
     ) internal {
         _counter++;
-        _bets[_counter] = Bet(market, payout, side);
+        _bets[_counter] = Bet(market, amount, payout, side);
         _mint(better, _counter);
     }
 
