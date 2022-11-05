@@ -1,5 +1,5 @@
 {
-  "name": "hardhat-project",
+  "name": "bet-pools-contracts",
   "scripts": {
     "compile": "npx hardhat compile",
     "test": "npx hardhat test",
