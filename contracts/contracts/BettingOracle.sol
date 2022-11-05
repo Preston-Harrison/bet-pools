@@ -2,8 +2,10 @@
 pragma solidity 0.8.16;
 
 struct OracleMarket {
+    mapping(bytes32 => bool) sideExists;
     bytes32 winningSide;
-    mapping(bytes32 => bool) sides;
+    uint256 bettingPeriodEnd;
+    bool isCancelled;
     bool exists;
 }
 
@@ -15,28 +17,36 @@ contract BettingOracle {
 
     mapping(bytes32 => OracleMarket) private _markets;
 
-    function getWinningSide(bytes32 marketId) external view returns (bytes32) {
+    /// Throws if a bet cannot be placed for a given market and sideId
+    function validateBet(bytes32 marketId, bytes32 sideId) external view {
+        _validateMarketIsOperational(marketId, sideId);
+        require(!isBettingOver(marketId), "Betting is over");
+    }
+
+    /// Throws if a bet cannot be claimed for a given market and side Id
+    function validateClaim(bytes32 marketId, bytes32 sideId) external view {
+        _validateMarketIsOperational(marketId, sideId);
+        require(isBettingOver(marketId), "Betting is not over");
+
         OracleMarket storage market = _markets[marketId];
-        require(doesMarketExist(marketId), "Market does not exist");
         require(market.winningSide != NO_WINNER, "Market winner not set");
-        return market.winningSide;
+        require(market.winningSide == sideId, "Side is not winner");
     }
 
-    function hasWinningSide(bytes32 marketId) external view returns (bool) {
-        OracleMarket storage market = _markets[marketId];
-        require(doesMarketExist(marketId), "Market does not exist");
-        return market.winningSide != NO_WINNER;
+    /// Throws if a bet cannot be withdrawn for a given market Id
+    function validateWithdraw(bytes32 marketId) external view {
+        require(_markets[marketId].isCancelled, "Market not cancelled");
+    }
+    
+    /// Throws if a market & side either does not exist, or is cancelled
+    function _validateMarketIsOperational(bytes32 marketId, bytes32 sideId) private view {
+        require(_markets[marketId].exists, "Market does not exist");
+        require(_markets[marketId].sideExists[sideId], "Side does not exist");
+        require(!_markets[marketId].isCancelled, "Market is cancelled");
     }
 
-    function doesMarketExist(bytes32 marketId) public view returns (bool) {
-        return _markets[marketId].exists;
-    }
-
-    function doesSideExist(bytes32 marketId, bytes32 side)
-        external
-        view
-        returns (bool)
-    {
-        return _markets[marketId].sides[side];
+    /// Returns whether a market betting period end has passed
+    function isBettingOver(bytes32 marketId) public view returns (bool) {
+        return block.timestamp >= _markets[marketId].bettingPeriodEnd;
     }
 }

@@ -26,23 +26,13 @@ contract BettingPool is LiquidityPool, BetToken {
     using SafeERC20 for IERC20;
 
     /// The oracle that provides betting information
-    address private immutable _oracle;
+    BettingOracle private immutable _oracle;
 
     /// Mapping of market Id to market
     mapping(bytes32 => Market) private _markets;
 
     event OpenMarket(bytes32 indexed market);
     event SetWinningSide(bytes32 indexed market, uint256 side);
-
-    /// Throws if the side is invalid
-    modifier onlyExistingSide(bytes32 marketId, bytes32 side) {
-        Market storage market = _markets[marketId];
-        require(
-            BettingOracle(_oracle).doesSideExist(marketId, side),
-            "Invalid side ID"
-        );
-        _;
-    }
 
     /// @param bettingToken The token to accept bets in
     constructor(
@@ -52,34 +42,19 @@ contract BettingPool is LiquidityPool, BetToken {
     ) Roles(owner) Transferrer(bettingToken) FeeDistribution(owner) {
         require(bettingToken.isContract(), "Betting token is not a contract");
         require(oracle.isContract(), "Oracle is not contract");
-        _oracle = oracle;
+        _oracle = BettingOracle(oracle);
     }
 
     /// @param marketId The id of the market to create
     /// corresponds with the side id with the same index
     function openMarket(bytes32 marketId) external onlyRole(ADMIN_ROLE) {
         Market storage market = _markets[marketId];
-        require(
-            BettingOracle(_oracle).doesMarketExist(marketId),
-            "Oracle does not recognise market"
-        );
-        require(
-            !BettingOracle(_oracle).hasWinningSide(marketId),
-            "Market already closed"
-        );
+        // TODO oracle validation
         require(!market.exists, "Market already exists");
 
         market.exists = true;
 
         emit OpenMarket(marketId);
-    }
-
-    /// Returns whether a market is still open for betting.
-    /// Reverts if the market does not exist
-    function _isMarketOpen(bytes32 marketId) private view returns (bool) {
-        require(_markets[marketId].exists, "Market non existant");
-        if (BettingOracle(_oracle).hasWinningSide(marketId)) return false;
-        return true;
     }
 
     /// Calculates the payout given an amount and odds
@@ -97,7 +72,7 @@ contract BettingPool is LiquidityPool, BetToken {
         view
         returns (uint256)
     {
-        uint256 free = getFreeBalance();
+        uint256 free = getFreeBalance(); // TODO maybe limit this to
         return 1 ether + (free * odds) / (free + amount);
     }
 
@@ -175,8 +150,8 @@ contract BettingPool is LiquidityPool, BetToken {
         uint256 odds,
         uint256 expiry,
         bytes calldata signature
-    ) external onlyExistingSide(marketId, side) {
-        require(_isMarketOpen(marketId), "Market not open");
+    ) external {
+        _oracle.validateBet(marketId, side);
         _validateOdds(odds, marketId, side, expiry, signature);
 
         uint256 amount = transferIn();
@@ -188,20 +163,12 @@ contract BettingPool is LiquidityPool, BetToken {
 
     /// Claims a bet with id betId
     function claim(uint256 betId) external {
-        Bet memory recordedBet = getBet(betId);
-        require(!_isMarketOpen(recordedBet.market), "Market still open");
-        require(
-            BettingOracle(_oracle).hasWinningSide(recordedBet.market),
-            "Winning side not set"
-        );
-        require(
-            recordedBet.side ==
-                BettingOracle(_oracle).getWinningSide(recordedBet.market),
-            "Bet did not win"
-        );
-        _decreaseReservedOnMarketClose(recordedBet.market);
+        Bet memory betToken = getBet(betId);
+        _oracle.validateClaim(betToken.market, betToken.side);
+        // since the oracle has validated the claim, the side of the bet is the winning side
+        _decreaseReservedOnMarketClose(betToken.market, betToken.side);
 
-        uint256 payout = recordedBet.payout;
+        uint256 payout = betToken.payout;
         // payout the owner of the token
         transferOut(ownerOf(betId), payout);
         // now that the user has been payed out, burn the token
@@ -212,13 +179,14 @@ contract BettingPool is LiquidityPool, BetToken {
 
     /// Decreases the reserved amounts for a marketId by the difference between
     /// the winning sides payout and the maximum payout side's payout.
-    function _decreaseReservedOnMarketClose(bytes32 marketId) private {
+    function _decreaseReservedOnMarketClose(bytes32 marketId, bytes32 winner)
+        private
+    {
         if (_markets[marketId].reserve == 0) {
             // the reserved amount has already been decreased.
             return;
         }
 
-        bytes32 winner = BettingOracle(_oracle).getWinningSide(marketId);
         uint256 truePayout = _markets[marketId].payouts[winner];
         uint256 reservedPayout = _markets[marketId].reserve;
 
