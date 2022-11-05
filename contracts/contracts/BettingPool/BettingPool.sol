@@ -17,8 +17,8 @@ struct Market {
     /// The amount this market should reserve for payouts
     /// This is set to zero after
     uint256 reserve;
-    // set to true if this market exists
-    bool exists;
+    /// The total value of bets on this market, in bettingToken
+    uint256 size;
 }
 
 contract BettingPool is LiquidityPool, BetToken {
@@ -31,9 +31,6 @@ contract BettingPool is LiquidityPool, BetToken {
     /// Mapping of market Id to market
     mapping(bytes32 => Market) private _markets;
 
-    event OpenMarket(bytes32 indexed market);
-    event SetWinningSide(bytes32 indexed market, uint256 side);
-
     /// @param bettingToken The token to accept bets in
     constructor(
         address bettingToken,
@@ -43,18 +40,6 @@ contract BettingPool is LiquidityPool, BetToken {
         require(bettingToken.isContract(), "Betting token is not a contract");
         require(oracle.isContract(), "Oracle is not contract");
         _oracle = BettingOracle(oracle);
-    }
-
-    /// @param marketId The id of the market to create
-    /// corresponds with the side id with the same index
-    function openMarket(bytes32 marketId) external onlyRole(ADMIN_ROLE) {
-        Market storage market = _markets[marketId];
-        // TODO oracle validation
-        require(!market.exists, "Market already exists");
-
-        market.exists = true;
-
-        emit OpenMarket(marketId);
     }
 
     /// Calculates the payout given an amount and odds
@@ -67,12 +52,12 @@ contract BettingPool is LiquidityPool, BetToken {
     }
 
     /// Adjusts odds based on the amount, given odds, and free liquidity
-    function _adjustOdds(uint256 amount, uint256 odds)
-        private
+    function getAdjustedOdds(uint256 amount, uint256 odds)
+        public
         view
         returns (uint256)
     {
-        uint256 free = getFreeBalance(); // TODO maybe limit this to
+        uint256 free = getFreeBalance(); // TODO maybe limit this
         return 1 ether + (free * odds) / (free + amount);
     }
 
@@ -91,13 +76,14 @@ contract BettingPool is LiquidityPool, BetToken {
         Market storage market = _markets[marketId];
 
         // adjust odds before moving on with calculations
-        uint256 adjustedOdds = _adjustOdds(amount, odds);
+        uint256 adjustedOdds = getAdjustedOdds(amount, odds);
         uint256 payout = _calculatePayout(amount, adjustedOdds);
 
         // if the market has become the new largest side payout, increase
         // the reserved amount so that the new reserved amount includes
         // the new total payout
         market.payouts[side] += payout;
+        market.size += amount;
         if (market.payouts[side] > market.reserve) {
             increaseReservedAmount(market.payouts[side] - market.reserve);
             market.reserve = market.payouts[side];
@@ -115,6 +101,7 @@ contract BettingPool is LiquidityPool, BetToken {
         uint256 expiry,
         bytes calldata signature
     ) private view {
+        require(odds > 1 ether, "Cannot have odds <= 1x");
         bytes memory message = abi.encodePacked(odds, market, side, expiry);
         bytes32 hash = ECDSA.toEthSignedMessageHash(keccak256(message));
         require(
@@ -133,9 +120,8 @@ contract BettingPool is LiquidityPool, BetToken {
     }
 
     /// Returns the market details
-    function getMarket(bytes32 marketId) external view returns (uint256, bool) {
-        Market storage market = _markets[marketId];
-        return (market.reserve, market.exists);
+    function getMarketReserve(bytes32 marketId) external view returns (uint256) {
+        return _markets[marketId].reserve;
     }
 
     /// Places a bet on a side, given a unique betKey (used for claiming / withdrawing).

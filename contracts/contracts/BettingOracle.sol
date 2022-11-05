@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity 0.8.16;
 
+import "@openzeppelin/contracts/access/Ownable.sol";
+
 struct OracleMarket {
     mapping(bytes32 => bool) sideExists;
     bytes32 winningSide;
@@ -9,13 +11,37 @@ struct OracleMarket {
     bool exists;
 }
 
-contract BettingOracle {
+contract BettingOracle is Ownable {
     bytes32 public constant NO_WINNER = bytes32(0);
 
-    // TODO oracle state setting
-    // Maybe restrict oracle fetching to valid betting pools?
-
     mapping(bytes32 => OracleMarket) private _markets;
+
+    event OpenMarket(bytes32 indexed marketId, bytes32[] sides, uint256 bettingPeriodEnd);
+    event WinnerSet(bytes32 indexed marketId, bytes32 winner);
+
+    function openMarket(
+        bytes32 marketId,
+        bytes32[] calldata sides,
+        uint256 bettingPeriodEnd
+    ) external onlyOwner {
+        require(!_markets[marketId].exists, "Market already exists");
+        require(sides.length >= 2, "Must have at least 2 sides");
+        _markets[marketId].bettingPeriodEnd = bettingPeriodEnd;
+        _markets[marketId].exists = true;
+
+        for(uint256 i = 0; i < sides.length; i++) {
+            // TODO does side == bytes32(0) cause issues?
+            _markets[marketId].sideExists[sides[i]] = true;
+        }
+        emit OpenMarket(marketId, sides, bettingPeriodEnd);
+    }
+
+    function setMarketWinner(bytes32 marketId, bytes32 winner) external onlyOwner {
+        _validateMarketIsOperational(marketId, winner);
+        require(_markets[marketId].winningSide == NO_WINNER, "Winner already set");
+        _markets[marketId].winningSide = winner;
+        emit WinnerSet(marketId, winner);
+    }
 
     /// Throws if a bet cannot be placed for a given market and sideId
     function validateBet(bytes32 marketId, bytes32 sideId) external view {
@@ -37,9 +63,12 @@ contract BettingOracle {
     function validateWithdraw(bytes32 marketId) external view {
         require(_markets[marketId].isCancelled, "Market not cancelled");
     }
-    
+
     /// Throws if a market & side either does not exist, or is cancelled
-    function _validateMarketIsOperational(bytes32 marketId, bytes32 sideId) private view {
+    function _validateMarketIsOperational(bytes32 marketId, bytes32 sideId)
+        private
+        view
+    {
         require(_markets[marketId].exists, "Market does not exist");
         require(_markets[marketId].sideExists[sideId], "Side does not exist");
         require(!_markets[marketId].isCancelled, "Market is cancelled");
