@@ -5,7 +5,7 @@ import "@openzeppelin/contracts/utils/math/Math.sol";
 
 library BettingMath {
     // TODO maybe use fast inverse sqrt algorithm to save gas
-    
+
     uint256 internal constant PRECISION = 1 ether;
     uint256 private constant SQUARED_PRECISION = PRECISION**2;
 
@@ -35,11 +35,14 @@ library BettingMath {
         uint256 linearX = maxPayout - sidePayout;
 
         uint256 linearY = (linearX * odds) / PRECISION;
-        
-        // liquidity - liquidity / sqrt((2x / liquidity) + 1)
+
+        // Uses rounding up to keep the scaled Y to a minumum (since it is on the denominator)
         uint256 scaledY = freeLiquidity -
             (freeLiquidity * PRECISION) /
-            Math.sqrt(2 * scaledX * SQUARED_PRECISION + SQUARED_PRECISION);
+            Math.sqrt(
+                2 * scaledX * SQUARED_PRECISION + SQUARED_PRECISION,
+                Math.Rounding.Up
+            );
 
         return linearY + scaledY;
     }

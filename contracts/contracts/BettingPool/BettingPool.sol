@@ -76,17 +76,16 @@ contract BettingPool is LiquidityPool, BetToken {
     }
 
     /// @param marketId the market to bet
-    /// @param better the user making the bet
     /// @param side the side to bet on
     /// @param amount the amount being bet
     /// @param odds the odds for this bet
+    /// @return id the token id of the bet
     function _createBet(
         bytes32 marketId,
-        address better,
         bytes32 side,
         uint256 amount,
         uint256 odds
-    ) private {
+    ) private returns (uint256) {
         Market storage market = _markets[marketId];
 
         uint256 payout = BettingMath.calculatePayout(
@@ -116,7 +115,7 @@ contract BettingPool is LiquidityPool, BetToken {
         }
 
         // since market specific logic is taken care of, mint the token
-        mintBet(better, marketId, amount, payout, side);
+        return mintBet(msg.sender, marketId, amount, payout, side);
     }
 
     /// Throws if the parameters provided are not signed by someone with SIGNER_ROLE
@@ -158,15 +157,13 @@ contract BettingPool is LiquidityPool, BetToken {
     /// Note the amount of the bet is calculated using the _transferIn function.
     /// @param marketId The id of the market to bet on
     /// @param side The side to back
-    /// @param better The better for whom to allocate the bet to
     function bet(
         bytes32 marketId,
         bytes32 side,
-        address better,
         uint256 odds,
         uint256 expiry,
         bytes calldata signature
-    ) external {
+    ) external returns (uint256) {
         _oracle.validateBet(marketId, side);
         _validateOdds(odds, marketId, side, expiry, signature);
 
@@ -174,11 +171,15 @@ contract BettingPool is LiquidityPool, BetToken {
         require(amount > 0, "Bet cannot be zero");
 
         uint256 betAmount = collectFees(amount, FeeType.Bet);
-        _createBet(marketId, better, side, betAmount, odds);
+        return _createBet(marketId, side, betAmount, odds);
     }
 
-    /// Claims a bet with id betId
-    function claim(uint256 betId) external {
+    /// Claims a bet with id betId and returns the payout from the claim
+    /// This can be called by anyone, and will always transfer the payout
+    /// to the owner of the bet
+    /// @param betId the id of the bet to claim
+    /// @return payout the payout of the bet, also the amount transferred out
+    function claimBet(uint256 betId) external returns (uint256) {
         Bet memory betToken = getBet(betId);
         _oracle.validateClaim(betToken.market, betToken.side);
         // since the oracle has validated the claim, collapse the market reserve
@@ -191,6 +192,7 @@ contract BettingPool is LiquidityPool, BetToken {
         burnBet(betId);
         // since the bet is being payed out, the reserved amounts can be decreased
         decreaseReservedAmount(payout);
+        return payout;
     }
 
     /// This should only be called after a market has finished accepting bets, either
@@ -219,6 +221,24 @@ contract BettingPool is LiquidityPool, BetToken {
             decreaseReservedAmount(reserve - market.payouts[winningSide]);
         }
         market.reserve = 0;
+    }
+
+    /// If a market has been cancelled (e.g. a sports game is called off),
+    /// all betters can claim the amount they bet back (except for fees).
+    /// This can be called by anyone, and withdraws the amount back to the
+    /// owner of the bet token
+    /// @param betId the bet to withdraw
+    /// @return size the size of the bet, also the amount transferred out
+    function withdrawBet(uint256 betId) external returns (uint256) {
+        Bet memory betToken = getBet(betId);
+        _oracle.validateWithdraw(betToken.market);
+        _collapseMarketReserve(betToken.market);
+        
+        uint256 size = betToken.size;
+        transferOut(ownerOf(betId), size);
+        decreaseReservedAmount(size);
+        burnBet(betId);
+        return size;
     }
 
     function supportsInterface(bytes4 interfaceId)

@@ -28,16 +28,18 @@ abstract contract BetToken is ERC721 {
     /// @param market the market of the bet
     /// @param payout the payout of the bet
     /// @param side the side of the bet
+    /// @return id the token id that was minted
     function mintBet(
         address better,
         bytes32 market,
         uint256 amount,
         uint256 payout,
         bytes32 side
-    ) internal {
+    ) internal returns (uint256) {
         _counter++;
         _bets[_counter] = Bet(market, amount, payout, side);
         _mint(better, _counter);
+        return _counter;
     }
 
     /// Burns a bet

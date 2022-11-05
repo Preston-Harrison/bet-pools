@@ -39,7 +39,7 @@ contract BettingOracle is Ownable {
 
     modifier onlyBettingPool() {
         require(
-            BettingFactory(_bettingFactory).getBettingPool(msg.sender).exists,
+            BettingFactory(_bettingFactory).isBettingPool(msg.sender),
             "Caller not betting pool"
         );
         _;

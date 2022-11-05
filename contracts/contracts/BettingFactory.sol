@@ -48,6 +48,12 @@ contract BettingFactory is Ownable {
         view
         returns (BettingPoolData memory)
     {
+        require(_bettingPool[pool].exists, "Betting pool does not exist");
         return _bettingPool[pool];
+    }
+
+    /// Returns whether an address is a betting pool
+    function isBettingPool(address pool) external view returns (bool) {
+        return _bettingPool[pool].exists;
     }
 }
