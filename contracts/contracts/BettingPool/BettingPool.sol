@@ -10,12 +10,15 @@ import "./BetToken.sol";
 import "../BettingOracle.sol";
 import "./Transferrer.sol";
 import "./FeeDistribution.sol";
+import "./BettingMath.sol";
 
 struct Market {
     /// Mapping of side id to total payout on each side
     mapping(bytes32 => uint256) payouts;
     /// The total value of bets on this market, in bettingToken
     uint256 size;
+    /// The side with the maximum payout's payout
+    uint256 maxPayout;
     /// The amount of bettingToken this market should reserve.
     /// While betting is active, this is either size, or the payout,
     /// of the side with the greatest payout, whichever is greater.
@@ -47,24 +50,28 @@ contract BettingPool is LiquidityPool, BetToken {
         _oracle = BettingOracle(oracle);
     }
 
-    /// Calculates the payout given an amount and odds
-    function _calculatePayout(uint256 amount, uint256 odds)
-        private
-        pure
-        returns (uint256)
-    {
-        return (amount * odds) / 1 ether;
-    }
-
-    /// Adjusts odds based on the amount, given odds, and free liquidity
-    function getAdjustedOdds(uint256 amount, uint256 odds)
-        public
-        view
-        returns (uint256)
-    {
-        // TODO only adjust odds once size increases reserved amount
-        uint256 free = getFreeBalance(); // TODO maybe limit this
-        return 1 ether + (free * odds) / (free + amount);
+    /// Returns the real (possible squashed) odds of a bet by taking the
+    /// ratio of calculated payout to input amount. This can be used by
+    /// routers to check the 'slippage' of odds.
+    /// @param amount the bet amount
+    /// @param odds the odds offered by the signer
+    /// @param marketId the market in which this bet will be placed
+    /// @param side the side on which this bet should be placed
+    function getRealOdds(
+        uint256 amount,
+        uint256 odds,
+        bytes32 marketId,
+        bytes32 side
+    ) external view returns (uint256) {
+        Market storage market = _markets[marketId];
+        uint256 payout = BettingMath.calculatePayout(
+            amount,
+            odds,
+            market.maxPayout,
+            market.payouts[side],
+            getFreeBalance()
+        );
+        return payout * 1 ether / amount;
     }
 
     /// @param marketId the market to bet
@@ -81,9 +88,13 @@ contract BettingPool is LiquidityPool, BetToken {
     ) private {
         Market storage market = _markets[marketId];
 
-        // adjust odds before moving on with calculations
-        uint256 adjustedOdds = getAdjustedOdds(amount, odds);
-        uint256 payout = _calculatePayout(amount, adjustedOdds);
+        uint256 payout = BettingMath.calculatePayout(
+            amount,
+            odds,
+            market.maxPayout,
+            market.payouts[side],
+            getFreeBalance()
+        );
 
         // adjust market values
         market.payouts[side] += payout;
@@ -97,6 +108,10 @@ contract BettingPool is LiquidityPool, BetToken {
         if (possibleNewReserve > market.reserve) {
             increaseReservedAmount(possibleNewReserve - market.reserve);
             market.reserve = possibleNewReserve;
+        }
+
+        if (newPayout > market.maxPayout) {
+            market.maxPayout = newPayout;
         }
 
         // since market specific logic is taken care of, mint the token
