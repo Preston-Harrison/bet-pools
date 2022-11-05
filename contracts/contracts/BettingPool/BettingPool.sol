@@ -232,10 +232,12 @@ contract BettingPool is LiquidityPool, BetToken {
             marketId
         );
 
+        // if the market is cancelled, then all sizes must be available to payout.
         if (isCancelled && reserve > market.size) {
             decreaseReservedAmount(reserve - market.size);
         } else if (reserve > market.payouts[winningSide]) {
-            /// at this point market is not cancelled, so winning side must be set
+            /// at this point market is not cancelled, so the contract must reserve the
+            /// total payouts of the winning side
             decreaseReservedAmount(reserve - market.payouts[winningSide]);
         }
         market.reserve = 0;
