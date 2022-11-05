@@ -73,6 +73,6 @@ contract BettingRouter {
         pool.safeTransferFrom(_self, msg.sender, betId);
     }
 
-    /// Router claim function is not necessary, there is no downside to just
-    /// calling the betting pool contract directly.
+    /// Router claimBet function is not necessary, there is no downside to just
+    /// calling the betting pool contract directly. Same with withdrawBet
 }
