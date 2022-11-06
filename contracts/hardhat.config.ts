@@ -3,6 +3,7 @@ import "@nomicfoundation/hardhat-toolbox";
 import "hardhat-contract-sizer";
 import "hardhat-gas-reporter";
 import "hardhat-exposed";
+import "solidity-coverage"
 
 const config: HardhatUserConfig = {
   solidity: {
@@ -17,6 +18,10 @@ const config: HardhatUserConfig = {
   gasReporter: {
     enabled: true,
     currency: "USD"
+  },
+  contractSizer: {
+    runOnCompile: true,
+    except: [":\\$"]
   }
 };
 

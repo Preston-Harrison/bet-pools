@@ -4,7 +4,8 @@
     "compile": "npx hardhat compile",
     "test": "npx hardhat test",
     "slither": "slither --solc-remaps @openzeppelin=node_modules/@openzeppelin --filter-paths openzeppelin",
-    "size": "npx hardhat size-contracts"
+    "size": "npx hardhat size-contracts",
+    "coverage": "npx hardhat coverage"
   },
   "devDependencies": {
     "@ethersproject/abi": "^5.7.0",
