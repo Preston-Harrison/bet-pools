@@ -78,7 +78,8 @@ abstract contract LiquidityPool is Transferrer, FeeDistribution {
 
     /// Deposits an amount of pool token and transfers the equal amount of
     /// liquidityToken to msg.sender
-    function deposit() external {
+    /// @return amountOut the amount of liquidity token minted to msg.sender
+    function deposit() external returns (uint256) {
         uint256 amount = transferIn();
         require(amount > 0, "Cannot deposit zero");
         // always collect fees in poolToken
@@ -87,13 +88,15 @@ abstract contract LiquidityPool is Transferrer, FeeDistribution {
         uint256 amountOut = calculateLiquidityTokenForDeposit(amountAfterFees);
         LiquidityToken(liquidityToken).mint(msg.sender, amountOut);
         emit Deposit(msg.sender, amount, amountOut);
+        return amountOut;
     }
 
     /// Withdraws an amount of pool token by burning an equal amount of
     /// liquidityToken from msg.sender, and transferring the poolToken to
     /// the msg.sender
     /// @param amount the amount of liquidityToken to burn
-    function withdraw(uint256 amount) external {
+    /// @return amountOut the amount of pool token sent to msg.sender
+    function withdraw(uint256 amount) external returns (uint256) {
         require(amount > 0, "Cannot withdraw zero");
         LiquidityToken(liquidityToken).burn(msg.sender, amount);
 
@@ -102,5 +105,6 @@ abstract contract LiquidityPool is Transferrer, FeeDistribution {
         uint256 amountOut = collectFees(poolTokenAmount, FeeType.Withdraw);
         transferOut(msg.sender, amountOut);
         emit Withdraw(msg.sender, amount, amountOut);
+        return amountOut;
     }
 }

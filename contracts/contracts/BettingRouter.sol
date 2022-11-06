@@ -55,16 +55,12 @@ contract BettingRouter {
         BettingPool pool = BettingPool(bettingPool);
         _transferIn(token, amount);
 
-        // revert if the minOdds are not met. This can happen if a large bet is
-        // placed right before this bet is placed, causing the odds to shift
-        uint256 realOdds = pool.getRealOdds(amount, odds, marketId, side);
-        require (realOdds >= minOdds, "Min odds not met");
-
         // Transfer the bet the betting pool, and place the bet
         IERC20(token).safeTransfer(bettingPool, amount);
         uint256 betId = pool.bet(
             marketId,
             side,
+            minOdds,
             odds,
             expiry,
             signature
@@ -73,6 +69,52 @@ contract BettingRouter {
         pool.safeTransferFrom(_self, msg.sender, betId);
     }
 
-    /// Router claimBet function is not necessary, there is no reason against just
-    /// calling the betting pool contract directly. Same with withdrawBet
+    function batchClaim(
+        address[] calldata bettingPools,
+        uint256[] calldata betIds
+    ) public {
+        require(bettingPools.length == betIds.length, "Array lengths differ");
+        for (uint256 i = 0; i < betIds.length; i++) {
+            BettingPool(bettingPools[i]).claimBet(betIds[i]);
+        }
+    }
+
+    // function batchClaimAndSetOracle
+
+    /// Deposits into a betting pool and transfers the liqudity tokens to the msg.sender
+    /// @param bettingPool the betting pool to deposit into
+    /// @param amount the amount to deposit
+    /// @param minOut the minimum amount of the pools liquidity token to receive
+    function deposit(
+        address bettingPool,
+        uint256 amount,
+        uint256 minOut
+    ) external {
+        address token = bettingFactory.getBettingPool(bettingPool).token;
+        BettingPool pool = BettingPool(bettingPool);
+        _transferIn(token, amount);
+
+        IERC20(token).safeTransfer(bettingPool, amount);
+        uint256 amountOut = pool.deposit();
+        require(amountOut > minOut, "Insufficient amount out");
+        IERC20(pool.liquidityToken()).safeTransfer(msg.sender, amountOut);
+    }
+
+    /// Withdraws from a pool and transfers the pool token to the msg.sender
+    /// @param bettingPool the betting pool to withdraw from
+    /// @param amount the amount to withdraw
+    /// @param minOut the minimum amount of the pool token to receive
+    function withdraw(
+        address bettingPool,
+        uint256 amount,
+        uint256 minOut
+    ) external {
+        address token = bettingFactory.getBettingPool(bettingPool).token;
+        BettingPool pool = BettingPool(bettingPool);
+        _transferIn(pool.liquidityToken(), amount);
+
+        uint256 amountOut = pool.withdraw(amount);
+        require(amountOut > minOut, "Insufficient amount out");
+        IERC20(token).safeTransfer(msg.sender, amountOut);
+    }
 }

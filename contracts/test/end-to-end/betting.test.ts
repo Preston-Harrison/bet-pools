@@ -76,6 +76,7 @@ describe("Betting", () => {
         const tx = BettingPool.connect(user).bet(
             marketId,
             sideIds[0],
+            0,
             odds,
             expiry,
             signOdds(oddsSigner, odds, hex(marketId), hex(sideIds[0]), bn(expiry, 0)),
@@ -112,6 +113,7 @@ describe("Betting", () => {
         const tx2 = BettingPool.connect(user).bet(
             marketId,
             sideIds[1],
+            0,
             odds2,
             expiry,
             signOdds(oddsSigner, odds2, hex(marketId), hex(sideIds[1]), bn(expiry, 0)),
@@ -147,6 +149,7 @@ describe("Betting", () => {
         await BettingPool.connect(user).bet(
             marketId,
             sideIds[0],
+            0,
             odds,
             expiry,
             sig

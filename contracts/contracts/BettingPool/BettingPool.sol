@@ -51,30 +51,6 @@ contract BettingPool is LiquidityPool, BetToken {
         _oracle = BettingOracle(oracle);
     }
 
-    /// Returns the real (possible squashed) odds of a bet by taking the
-    /// ratio of calculated payout to input amount. This can be used by
-    /// routers to check the 'slippage' of odds.
-    /// @param amount the bet amount
-    /// @param odds the odds offered by the signer
-    /// @param marketId the market in which this bet will be placed
-    /// @param side the side on which this bet should be placed
-    function getRealOdds(
-        uint256 amount,
-        uint256 odds,
-        bytes32 marketId,
-        bytes32 side
-    ) external view returns (uint256) {
-        Market storage market = _markets[marketId];
-        uint256 payout = BettingMath.calculatePayout(
-            amount,
-            odds,
-            market.maxPayout,
-            market.payouts[side],
-            getFreeBalance()
-        );
-        return payout * BettingMath.PRECISION / amount;
-    }
-
     /// @param marketId the market to bet
     /// @param side the side to bet on
     /// @param amount the amount being bet
@@ -84,7 +60,8 @@ contract BettingPool is LiquidityPool, BetToken {
         bytes32 marketId,
         bytes32 side,
         uint256 amount,
-        uint256 odds
+        uint256 odds,
+        uint256 minOdds
     ) private returns (uint256) {
         Market storage market = _markets[marketId];
 
@@ -95,6 +72,9 @@ contract BettingPool is LiquidityPool, BetToken {
             market.payouts[side],
             getFreeBalance()
         );
+
+        uint256 realOdds = payout * BettingMath.PRECISION / amount;
+        require(realOdds >= minOdds, "Min odds not met");
 
         // adjust market values
         market.payouts[side] += payout;
@@ -161,6 +141,7 @@ contract BettingPool is LiquidityPool, BetToken {
     function bet(
         bytes32 marketId,
         bytes32 side,
+        uint256 minOdds,
         uint256 odds,
         uint256 expiry,
         bytes calldata signature
@@ -172,7 +153,7 @@ contract BettingPool is LiquidityPool, BetToken {
         require(amount > 0, "Bet cannot be zero");
 
         uint256 betAmount = collectFees(amount, FeeType.Bet);
-        return _createBet(marketId, side, betAmount, odds);
+        return _createBet(marketId, side, betAmount, odds, minOdds);
     }
 
     /// Claims a bet with id betId and returns the payout from the claim
