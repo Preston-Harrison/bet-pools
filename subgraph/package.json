@@ -1,11 +1,11 @@
 {
-  "name": "bet-pool-subgraph",
+  "name": "main",
   "version": "0.1.0",
   "scripts": {
-    "create": "graph create example --node http://127.0.0.1:8020",
+    "create-local": "graph create main --node http://127.0.0.1:8020",
     "codegen": "graph codegen",
     "build": "graph build",
-    "deploy-local": "graph deploy example --ipfs http://127.0.0.1:5001 --node http://127.0.0.1:8020"
+    "deploy-local": "graph deploy main --ipfs http://127.0.0.1:5001 --node http://127.0.0.1:8020"
   },
   "devDependencies": {
     "@graphprotocol/graph-cli": "^0.30.2",
