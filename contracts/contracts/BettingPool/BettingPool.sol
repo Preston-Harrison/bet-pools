@@ -136,7 +136,7 @@ contract BettingPool is LiquidityPool, BetToken {
     }
 
     /// Returns the side for a market
-    function getPayout(bytes32 marketId, bytes32 side)
+    function getSidePayout(bytes32 marketId, bytes32 side)
         external
         view
         returns (uint256)
