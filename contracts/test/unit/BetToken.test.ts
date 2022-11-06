@@ -27,4 +27,12 @@ describe("BetToken.sol", () => {
         expect(bet.size).to.eq(bn(10));
         expect(await BetToken.ownerOf(1)).to.eq(deployer.address);
     });
+
+    it("should burn a bet and delete its details", async () => {
+        const market = r32();
+        const side = r32();
+        await BetToken.$mintBet(deployer.address, market, bn(10), bn(20), side);
+        await BetToken.$burnBet(1);
+        await expect(BetToken.getBet(1)).to.be.revertedWith("Bet does not exist");
+    });
 });
