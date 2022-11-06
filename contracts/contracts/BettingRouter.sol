@@ -69,6 +69,7 @@ contract BettingRouter {
         pool.safeTransferFrom(_self, msg.sender, betId);
     }
 
+    /// Allows multiple bets to be claimed in the same transaction
     function batchClaim(
         address[] calldata bettingPools,
         uint256[] calldata betIds
@@ -79,7 +80,16 @@ contract BettingRouter {
         }
     }
 
-    // function batchClaimAndSetOracle
+    /// Allows multiple bets to be withdrawn in the same transaction
+    function batchWithdraw(
+        address[] calldata bettingPools,
+        uint256[] calldata betIds
+    ) public {
+        require(bettingPools.length == betIds.length, "Array lengths differ");
+        for (uint256 i = 0; i < betIds.length; i++) {
+            BettingPool(bettingPools[i]).withdrawBet(betIds[i]);
+        }
+    }
 
     /// Deposits into a betting pool and transfers the liqudity tokens to the msg.sender
     /// @param bettingPool the betting pool to deposit into
