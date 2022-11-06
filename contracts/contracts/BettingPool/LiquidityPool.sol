@@ -18,6 +18,8 @@ abstract contract LiquidityPool is Transferrer, FeeDistribution {
     /// The minimum balance this liquidity pool can reach
     uint256 private _reservedAmount;
 
+    bool private _isPrivateDepositMode;
+
     event Deposit(address indexed account, uint256 amountIn, uint256 amountOut);
     event Withdraw(
         address indexed account,
@@ -26,11 +28,23 @@ abstract contract LiquidityPool is Transferrer, FeeDistribution {
     );
     event IncreaseReservedAmount(uint256 amount);
     event DecreaseReservedAmount(uint256 amount);
+    event SetIsPrivateDepositMode(bool isPrivate);
 
     constructor() {
         liquidityToken = address(
             new LiquidityToken("BET Pool", "sBET", ERC20(poolToken).decimals())
         );
+    }
+
+    /// Sets whether this contract is in private deposit mode, meaning only those with
+    /// DEPOSIT_ROLE can deposit
+    function setPrivateDepositMode(bool isPrivate)
+        external
+        onlyRole(ADMIN_ROLE)
+    {
+        require(_isPrivateDepositMode != isPrivate, "State already set");
+        _isPrivateDepositMode = isPrivate;
+        emit SetIsPrivateDepositMode(isPrivate);
     }
 
     /// Returns the reserved amounts
@@ -73,6 +87,7 @@ abstract contract LiquidityPool is Transferrer, FeeDistribution {
         returns (uint256)
     {
         uint256 liquidityTokenSupply = IERC20(liquidityToken).totalSupply();
+        if (liquidityTokenSupply == 0) return withdrawAmount;
         return (withdrawAmount * getFreeBalance()) / liquidityTokenSupply;
     }
 
@@ -80,6 +95,10 @@ abstract contract LiquidityPool is Transferrer, FeeDistribution {
     /// liquidityToken to msg.sender
     /// @return amountOut the amount of liquidity token minted to msg.sender
     function deposit() external returns (uint256) {
+        require(
+            !_isPrivateDepositMode || hasRole(DEPOSIT_ROLE, msg.sender),
+            "Unauthorized deposit"
+        );
         uint256 amount = transferIn();
         require(amount > 0, "Cannot deposit zero");
         // always collect fees in poolToken

@@ -131,10 +131,8 @@ describe("Betting", () => {
     it("should allow a user to claim a bet", async () => {
         await Token.mint(BettingPool.address, bn(1000));
         await BettingPool.deposit();
-        const deposit = bn(1000).mul(bn(1).sub(DEPOSIT_WITHDRAW_FEE)).div(bn(1));
 
         const bet = bn(20);
-        const fee = bet.mul(BET_FEE).div(bn(1));
         const odds = bn(3);
         const expiry = bn(await timestamp() + 1000, 0);
         const sig = await signOdds(
