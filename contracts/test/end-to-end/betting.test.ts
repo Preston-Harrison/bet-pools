@@ -88,6 +88,14 @@ describe("Betting", () => {
                 .withArgs(ethers.constants.AddressZero, user.address, 1)
                 .and.to.emit(BettingPool, "FeeCollected")
                 .withArgs(fee, FeeType.Bet);
+
+            expect(await BettingPool.getSidePayout(marketId, sideIds[0])).to.eq(expectedPayout);
+            const [size, reserve, maxPayout] = await BettingPool.getMarket(marketId);
+            expect(size).to.eq(bet.sub(fee));
+            expect(reserve).to.eq(expectedPayout);
+            expect(maxPayout).to.eq(expectedPayout);
+
+
         });
     })
 });

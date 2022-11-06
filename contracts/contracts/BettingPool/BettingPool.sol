@@ -148,9 +148,10 @@ contract BettingPool is LiquidityPool, BetToken {
     function getMarket(bytes32 marketId)
         external
         view
-        returns (uint256, uint256)
+        returns (uint256, uint256, uint256)
     {
-        return (_markets[marketId].size, _markets[marketId].reserve);
+        Market storage market = _markets[marketId];
+        return (market.size, market.reserve, market.maxPayout);
     }
 
     /// Places a bet on a side, given a unique betKey (used for claiming / withdrawing).
