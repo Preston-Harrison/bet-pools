@@ -51,18 +51,19 @@ abstract contract LiquidityPool is Transferrer, FeeDistribution {
     }
 
     /// Calculates the amount of liquidityToken equal to depositAmount of poolToken
-    function _calculateLiquidityTokenForDeposit(uint256 depositAmount)
-        private
+    function calculateLiquidityTokenForDeposit(uint256 depositAmount)
+        internal
         view
         returns (uint256)
     {
         uint256 liquidityTokenSupply = IERC20(liquidityToken).totalSupply();
+        if (liquidityTokenSupply == 0) return depositAmount;
         return (depositAmount * liquidityTokenSupply) / getFreeBalance();
     }
 
     /// Calculates the amount of poolToken equal to depositAmount of liquidityToken
-    function _calculatePoolTokenForWithdraw(uint256 withdrawAmount)
-        private
+    function calculatePoolTokenForWithdraw(uint256 withdrawAmount)
+        internal
         view
         returns (uint256)
     {
@@ -75,11 +76,10 @@ abstract contract LiquidityPool is Transferrer, FeeDistribution {
     function deposit() external {
         uint256 amount = transferIn();
         require(amount > 0, "Cannot deposit zero");
+        // always collect fees in poolToken
+        uint256 amountAfterFees = collectFees(amount, FeeType.Deposit);
 
-        uint256 liquidityTokenAmount = _calculateLiquidityTokenForDeposit(
-            amount
-        );
-        uint256 amountOut = collectFees(liquidityTokenAmount, FeeType.Deposit);
+        uint256 amountOut = calculateLiquidityTokenForDeposit(amountAfterFees);
         LiquidityToken(liquidityToken).mint(msg.sender, amountOut);
         emit Deposit(msg.sender, amount, amountOut);
     }
@@ -92,7 +92,8 @@ abstract contract LiquidityPool is Transferrer, FeeDistribution {
         require(amount > 0, "Cannot withdraw zero");
         LiquidityToken(liquidityToken).burn(msg.sender, amount);
 
-        uint256 poolTokenAmount = _calculatePoolTokenForWithdraw(amount);
+        uint256 poolTokenAmount = calculatePoolTokenForWithdraw(amount);
+        // always collect fees in poolToken
         uint256 amountOut = collectFees(poolTokenAmount, FeeType.Withdraw);
         transferOut(msg.sender, amountOut);
         emit Withdraw(msg.sender, amount, amountOut);

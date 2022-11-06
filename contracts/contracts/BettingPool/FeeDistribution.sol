@@ -17,7 +17,7 @@ abstract contract FeeDistribution is Transferrer, Roles {
     using Address for address;
     using SafeERC20 for IERC20;
 
-    /// All deposit/withdraw fees go to the factory
+    /// All deposit/withdraw fees go to the the deployer
     uint256 public constant DEPOSIT_WITHDRAW_FEE = 0.001 * 1 ether; // 0.1%
 
     /// Bet fees are taken and distributed to the liquidity providers and
@@ -31,7 +31,7 @@ abstract contract FeeDistribution is Transferrer, Roles {
     /// The recipient of admin fees
     address public adminFeeReceipient;
     /// The address of the deployer of this contract
-    address private immutable _factory;
+    address private immutable _deployer;
 
     event ChangeFeeRecipient(address feeReceipient);
     event FeeCollected(uint256 fee, FeeType indexed feeType);
@@ -41,9 +41,8 @@ abstract contract FeeDistribution is Transferrer, Roles {
             adminFeeReceipient_ != address(0),
             "Admin fee recipient cannot be zero"
         );
-        require(msg.sender.isContract(), "Msg.sender must be factory");
         adminFeeReceipient = adminFeeReceipient_;
-        _factory = msg.sender;
+        _deployer = msg.sender;
     }
 
     /// Sets the admin fee recipient
@@ -65,15 +64,15 @@ abstract contract FeeDistribution is Transferrer, Roles {
         returns (uint256 amountRemaining)
     {
         if (feeType == FeeType.Deposit || feeType == FeeType.Withdraw) {
-            uint256 fee = _calculateFraction(amount, DEPOSIT_WITHDRAW_FEE);
-            transferOut(_factory, fee);
+            uint256 fee = calculateFraction(amount, DEPOSIT_WITHDRAW_FEE);
+            transferOut(_deployer, fee);
             amountRemaining = amount - fee;
         } else if (feeType == FeeType.Bet) {
-            uint256 totalFee = _calculateFraction(amount, BET_FEE);
+            uint256 totalFee = calculateFraction(amount, BET_FEE);
             // no need to transfer liquidty fee as it just accrues in the pool
             transferOut(
                 adminFeeReceipient,
-                _calculateFraction(totalFee, ADMIN_FEE)
+                calculateFraction(totalFee, ADMIN_FEE)
             );
             amountRemaining = amount - totalFee;
         }
@@ -82,8 +81,8 @@ abstract contract FeeDistribution is Transferrer, Roles {
         return amountRemaining;
     }
 
-    function _calculateFraction(uint256 amount, uint256 fraction)
-        private
+    function calculateFraction(uint256 amount, uint256 fraction)
+        internal
         pure
         returns (uint256)
     {
