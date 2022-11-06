@@ -94,8 +94,37 @@ describe("Betting", () => {
             expect(size).to.eq(bet.sub(fee));
             expect(reserve).to.eq(expectedPayout);
             expect(maxPayout).to.eq(expectedPayout);
+            
+            const bet2 = bn(30);
+            const fee2 = bet2.mul(BET_FEE).div(bn(1));
+            const odds2 = bn(5);
+            const freeLiquidity2 = 
+                (await Token.balanceOf(BettingPool.address))
+                .sub(await BettingPool.getReservedAmount());
+            const expectedPayout2 = await BettingMath.$calculatePayout(
+                bet2.sub(fee2),
+                odds2,
+                expectedPayout,
+                0,
+                freeLiquidity2.add(bet2.sub(fee2.mul(ADMIN_FEE).div(bn(1))))
+            );
+            await Token.mint(user.address, bet2);
+            await Token.connect(user).transfer(BettingPool.address, bet2);
+            const tx2 = BettingPool.connect(user).bet(
+                marketId,
+                sideIds[1],
+                odds2,
+                expiry,
+                signOdds(oddsSigner, odds2, hex(marketId), hex(sideIds[1]), bn(expiry, 0)),
+            );
 
-
+            await expect(tx2)
+                .to.emit(BettingPool, "IncreaseReservedAmount")
+                .withArgs(expectedPayout2.sub(expectedPayout))
+                .and.to.emit(BettingPool, "Transfer")
+                .withArgs(ethers.constants.AddressZero, user.address, 2)
+                .and.to.emit(BettingPool, "FeeCollected")
+                .withArgs(fee2, FeeType.Bet);
         });
     })
 });

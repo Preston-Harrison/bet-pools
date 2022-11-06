@@ -33,6 +33,11 @@ abstract contract LiquidityPool is Transferrer, FeeDistribution {
         );
     }
 
+    /// Returns the reserved amounts
+    function getReservedAmount() external view returns (uint256) {
+        return _reservedAmount;
+    }
+
     /// Increases the reserved amount
     function increaseReservedAmount(uint256 amount) internal {
         _reservedAmount += amount;
