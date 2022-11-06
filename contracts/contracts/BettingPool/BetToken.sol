@@ -50,6 +50,7 @@ abstract contract BetToken is ERC721 {
 
     /// Returns a bet
     function getBet(uint256 betId) public view returns (Bet memory) {
+        require(_exists(betId), "Bet does not exist");
         return _bets[betId];
     }
 }

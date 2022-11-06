@@ -18,7 +18,7 @@ describe("LiquidityPool.sol", () => {
             to: LiquidityPool.address,
             value: bn(1)
         });
-        const liquidityPool = await ethers.getSigner(LiquidityPool.address);
+        const liquidityPool = await ethers.getImpersonatedSigner(LiquidityPool.address);
         return LiquidityToken.connect(liquidityPool).mint(address, amount);
     }
 
@@ -34,11 +34,6 @@ describe("LiquidityPool.sol", () => {
             await LiquidityPool.liquidityToken(),
             deployer
         );
-
-        await hre.network.provider.request({
-            method: "hardhat_impersonateAccount",
-            params: [LiquidityPool.address],
-        });
     });
 
     it("should increase and decrease reserved amounts", async () => {
